@@ -1,0 +1,6 @@
+# Sortie de compilation (build.bat la régénère)
+Mental-o.exe
+*.pdb
+
+# Cartes de test locales
+*.zeubi
