@@ -84,14 +84,6 @@ namespace Mentalo.Vue
             // Pas d'accrochage aux pixels : sous zoom, il rendait les bordures irrégulières.
             SnapsToDevicePixels = false;
             UseLayoutRounding = false;
-            Effect = new DropShadowEffect
-            {
-                Color = Colors.Black,
-                Opacity = 0.18,
-                BlurRadius = 6,
-                ShadowDepth = 1.5,
-                Direction = 270
-            };
 
             _fond = new Rectangle();
             Children.Add(_fond);
@@ -162,9 +154,23 @@ namespace Mentalo.Vue
             return image;
         }
 
-        /// <summary>Applique le style de boîte du modèle : fond, bordure, coins.</summary>
+        /// <summary>Applique le style de boîte du modèle : fond, bordure, coins, ombre, opacité.</summary>
         public void MettreAJourStyle()
         {
+            if (Modele.Ombre == "aucune")
+                Effect = null;
+            else
+                Effect = new DropShadowEffect
+                {
+                    Color = Colors.Black,
+                    Opacity = Modele.Ombre == "marquee" ? 0.38 : 0.18,
+                    BlurRadius = Modele.Ombre == "marquee" ? 14 : 6,
+                    ShadowDepth = Modele.Ombre == "marquee" ? 3.5 : 1.5,
+                    Direction = 270
+                };
+            // Opacité bornée : une boîte totalement invisible serait introuvable.
+            Opacity = Math.Max(0.15, Math.Min(1.0, Modele.Opacite > 0 ? Modele.Opacite : 1));
+
             _fond.Fill = new SolidColorBrush(TexteRiche.CouleurDepuis(Modele.FondCouleur, Colors.White));
             _fond.RadiusX = Modele.Rayon;
             _fond.RadiusY = Modele.Rayon;
@@ -611,6 +617,8 @@ namespace Mentalo.Vue
             etat.BordureEpaisseur = Modele.BordureEpaisseur;
             etat.BordureTrait = Modele.BordureTrait;
             etat.Rayon = Modele.Rayon;
+            etat.Ombre = Modele.Ombre;
+            etat.Opacite = Modele.Opacite;
         }
     }
 }

@@ -73,7 +73,13 @@ namespace Mentalo.Vue
 
         private Noeud _noeudFraichementCree;
         private StyleBoite _stylePresse;    // « copier le style » d'une boîte
-        private StyleBoite _styleParDefaut; // style appliqué aux nouvelles boîtes
+        // Le style des nouvelles boîtes vit dans Document.BoiteParDefaut (préférence du fichier).
+
+        // Poignée de courbure des liens courbes
+        private readonly Ellipse _poigneeCourbure;
+        private bool _courbureEnCours;
+        private Lien _lienCourbure;
+        private double _departCourbure;
 
         // Redimensionnement des images
         private const long TailleImageMax = 5 * 1024 * 1024;
@@ -130,6 +136,7 @@ namespace Mentalo.Vue
             _mode = mode;
             if (_mode == "deplacement" || _mode == "lecture") CacherPoignees();
             MettreAJourGrip();
+            MettreAJourPoigneeCourbure();
             SignalerFormatCible();
             Action h = ModeChange;
             if (h != null) h();
@@ -184,6 +191,16 @@ namespace Mentalo.Vue
             _grip.Cursor = Cursors.SizeNWSE;
             _grip.Visibility = Visibility.Collapsed;
 
+            _poigneeCourbure = new Ellipse();
+            _poigneeCourbure.Width = 12;
+            _poigneeCourbure.Height = 12;
+            _poigneeCourbure.Fill = new SolidColorBrush(Color.FromRgb(0xE0, 0x63, 0x8C));
+            _poigneeCourbure.Stroke = Brushes.White;
+            _poigneeCourbure.StrokeThickness = 2;
+            _poigneeCourbure.Cursor = Cursors.SizeAll;
+            _poigneeCourbure.ToolTip = "Courbure du lien : tirer pour bomber le trait";
+            _poigneeCourbure.Visibility = Visibility.Collapsed;
+
             _rectangleSelection = new Rectangle();
             _rectangleSelection.Stroke = new SolidColorBrush(Color.FromRgb(0x00, 0x78, 0xD7));
             _rectangleSelection.StrokeThickness = 1;
@@ -225,6 +242,8 @@ namespace Mentalo.Vue
             _canvas.Children.Add(_lienTemporaire);
             Canvas.SetZIndex(_grip, ZPremierPlan);
             _canvas.Children.Add(_grip);
+            Canvas.SetZIndex(_poigneeCourbure, ZPremierPlan);
+            _canvas.Children.Add(_poigneeCourbure);
             Canvas.SetZIndex(_rectangleSelection, ZPremierPlan);
             _canvas.Children.Add(_rectangleSelection);
             Canvas.SetZIndex(_guideVertical, ZPremierPlan);
@@ -352,6 +371,9 @@ namespace Mentalo.Vue
             }
             _lienTemporaire.Visibility = Visibility.Collapsed;
             _grip.Visibility = Visibility.Collapsed;
+            _poigneeCourbure.Visibility = Visibility.Collapsed;
+            _courbureEnCours = false;
+            _lienCourbure = null;
             _redimensionEnCours = false;
             _noeudRedimensionne = null;
             AjouterCalquesOutils();
@@ -476,6 +498,7 @@ namespace Mentalo.Vue
                 {
                     _selectionLien.DefinirSelection(false);
                     _selectionLien = null;
+                    MettreAJourPoigneeCourbure();
                 }
                 _canvas.Children.Remove(visuel);
                 _visuelsLiens.Remove(lien);
@@ -495,6 +518,27 @@ namespace Mentalo.Vue
                 visuel.AppliquerStyle();
             MettreAJourGeometrieLien(lien);
             SignalerModification();
+        }
+
+        public void AppliquerTraceLien(Lien lien, string trace, double courbure)
+        {
+            lien.Trace = trace;
+            lien.Courbure = courbure;
+            MettreAJourGeometrieLien(lien);
+            MettreAJourPoigneeCourbure();
+            SignalerModification();
+            SignalerFormatCible();
+        }
+
+        public void AppliquerEtiquetteLien(Lien lien, string etiquette)
+        {
+            lien.Etiquette = etiquette ?? "";
+            LienVisuel visuel;
+            if (_visuelsLiens.TryGetValue(lien, out visuel))
+                visuel.AppliquerStyle();
+            MettreAJourGeometrieLien(lien);
+            SignalerModification();
+            SignalerFormatCible();
         }
 
         public void SupprimerSelection()
@@ -635,6 +679,67 @@ namespace Mentalo.Vue
             visuel.MettreAJourGeometrie(
                 PointAncrage(rectSource, centreCible),
                 PointAncrage(rectCible, centreSource));
+            if (_selectionLien != null && _selectionLien.Modele == lien)
+                MettreAJourPoigneeCourbure();
+        }
+
+        /// <summary>La poignée de courbure vit au milieu du tracé du lien courbe sélectionné.</summary>
+        private void MettreAJourPoigneeCourbure()
+        {
+            if (_selectionLien == null || _selectionLien.Modele.Trace != "courbe" || _mode == "lecture")
+            {
+                _poigneeCourbure.Visibility = Visibility.Collapsed;
+                return;
+            }
+            Point milieu = _selectionLien.PointMilieu();
+            Canvas.SetLeft(_poigneeCourbure, milieu.X - _poigneeCourbure.Width / 2);
+            Canvas.SetTop(_poigneeCourbure, milieu.Y - _poigneeCourbure.Height / 2);
+            _poigneeCourbure.Visibility = Visibility.Visible;
+        }
+
+        private void CommencerCourbure()
+        {
+            if (_selectionLien == null || _mode == "lecture") return;
+            _courbureEnCours = true;
+            _lienCourbure = _selectionLien.Modele;
+            _departCourbure = _lienCourbure.Courbure;
+            CaptureMouse();
+        }
+
+        /// <summary>Rectangles des extrémités du lien, pour convertir la position de la
+        /// souris en courbure signée.</summary>
+        private void GlisserCourbure(Point souris)
+        {
+            Rect rectSource, rectCible;
+            if (!RectangleExtremite(_lienCourbure.SourceId, out rectSource)
+                || !RectangleExtremite(_lienCourbure.CibleId, out rectCible)) return;
+            Point a = PointAncrage(rectSource, Centre(rectCible));
+            Point b = PointAncrage(rectCible, Centre(rectSource));
+            Vector direction = b - a;
+            if (direction.Length < 1) return;
+            direction.Normalize();
+            Vector perpendiculaire = new Vector(-direction.Y, direction.X);
+            Point milieu = new Point((a.X + b.X) / 2, (a.Y + b.Y) / 2);
+            // Le point à mi-parcours de la Bézier s'écarte de courbure/2 : on double donc
+            // l'écart de la souris pour que la courbe passe sous le curseur.
+            double ecart = Vector.Multiply(souris - milieu, perpendiculaire);
+            _lienCourbure.Courbure = Math.Max(-400, Math.Min(400, ecart * 2));
+            MettreAJourGeometrieLien(_lienCourbure);
+        }
+
+        private void TerminerCourbure()
+        {
+            ReleaseMouseCapture();
+            _courbureEnCours = false;
+            double nouvelle = _lienCourbure.Courbure;
+            if (nouvelle != _departCourbure)
+            {
+                // On repart de l'ancienne valeur pour que la commande capture le bon état.
+                _lienCourbure.Courbure = _departCourbure;
+                Historique.ExecuterEtPousser(new CommandeModifierTraceLien(
+                    this, _lienCourbure, _lienCourbure.Trace, nouvelle));
+            }
+            _lienCourbure = null;
         }
 
         private void MettreAJourLiensDeId(string id)
@@ -683,6 +788,14 @@ namespace Mentalo.Vue
             {
                 Focus();
                 CommencerRedimension();
+                e.Handled = true;
+                return;
+            }
+
+            if (ReferenceEquals(e.OriginalSource, _poigneeCourbure))
+            {
+                Focus();
+                CommencerCourbure();
                 e.Handled = true;
                 return;
             }
@@ -880,6 +993,12 @@ namespace Mentalo.Vue
                 return;
             }
 
+            if (_courbureEnCours)
+            {
+                GlisserCourbure(e.GetPosition(_canvas));
+                return;
+            }
+
             if (_redimensionEnCours)
             {
                 Point p = e.GetPosition(_canvas);
@@ -995,6 +1114,12 @@ namespace Mentalo.Vue
             if (_panEnCours)
             {
                 TerminerPan();
+                return;
+            }
+
+            if (_courbureEnCours)
+            {
+                TerminerCourbure();
                 return;
             }
 
@@ -1291,7 +1416,7 @@ namespace Mentalo.Vue
                 : (cibleGroupe != null ? cibleGroupe.Id : null);
             if (cibleId != null && _lienSourceId != null && !LienExiste(_lienSourceId, cibleId))
             {
-                Lien lien = new Lien();
+                Lien lien = Document.NouveauLien();
                 lien.SourceId = _lienSourceId;
                 lien.CibleId = cibleId;
                 Historique.ExecuterEtPousser(new CommandeCreerLien(this, lien));
@@ -1377,6 +1502,29 @@ namespace Mentalo.Vue
             AjouterChoixFleche(fleche, lien, "Dans les deux sens", "double");
             menu.Items.Add(fleche);
 
+            MenuItem trace = new MenuItem { Header = "Tracé" };
+            AjouterChoixTrace(trace, lien, "Droit", "droit");
+            AjouterChoixTrace(trace, lien, "Courbe", "courbe");
+            AjouterChoixTrace(trace, lien, "Équerre", "equerre");
+            menu.Items.Add(trace);
+
+            menu.Items.Add(new Separator());
+            MenuItem etiquette = new MenuItem
+            {
+                Header = string.IsNullOrEmpty(lien.Etiquette) ? "Ajouter une étiquette…" : "Modifier l'étiquette…"
+            };
+            etiquette.Click += delegate { DemanderEtiquetteLien(lien); };
+            menu.Items.Add(etiquette);
+            if (!string.IsNullOrEmpty(lien.Etiquette))
+            {
+                MenuItem retirerEtiquette = new MenuItem { Header = "Retirer l'étiquette" };
+                retirerEtiquette.Click += delegate
+                {
+                    Historique.ExecuterEtPousser(new CommandeModifierEtiquetteLien(this, lien, ""));
+                };
+                menu.Items.Add(retirerEtiquette);
+            }
+
             menu.Items.Add(new Separator());
             MenuItem supprimer = new MenuItem { Header = "Supprimer le lien", InputGestureText = "Suppr" };
             supprimer.Click += delegate
@@ -1429,6 +1577,31 @@ namespace Mentalo.Vue
             if (lien.Couleur == couleur && lien.Epaisseur == epaisseur && lien.Trait == trait && lien.Fleche == fleche)
                 return;
             Historique.ExecuterEtPousser(new CommandeModifierStyleLien(this, lien, couleur, epaisseur, trait, fleche));
+        }
+
+        private void AjouterChoixTrace(MenuItem parent, Lien lien, string nom, string valeur)
+        {
+            MenuItem element = new MenuItem { Header = nom, IsChecked = lien.Trace == valeur };
+            element.Click += delegate { ChangerTraceLien(lien, valeur); };
+            parent.Items.Add(element);
+        }
+
+        private void ChangerTraceLien(Lien lien, string trace)
+        {
+            if (lien.Trace == trace) return;
+            // Une courbe toute neuve part avec un bombé visible ; il se règle à la poignée.
+            double courbure = trace == "courbe"
+                ? (Math.Abs(lien.Courbure) > 0.5 ? lien.Courbure : 46)
+                : lien.Courbure;
+            Historique.ExecuterEtPousser(new CommandeModifierTraceLien(this, lien, trace, courbure));
+        }
+
+        public void DemanderEtiquetteLien(Lien lien)
+        {
+            string texte = DialogueSaisie.DemanderTexte(Window.GetWindow(this),
+                "Étiquette du lien", "Texte posé au milieu du trait :", lien.Etiquette ?? "");
+            if (texte == null || texte == (lien.Etiquette ?? "")) return;
+            Historique.ExecuterEtPousser(new CommandeModifierEtiquetteLien(this, lien, texte.Trim()));
         }
 
         // ------------------------------------------------------------------ zoom
@@ -1484,7 +1657,7 @@ namespace Mentalo.Vue
         private void CreerNoeudA(Point positionCanvas)
         {
             Noeud noeud = new Noeud();
-            if (_styleParDefaut != null) _styleParDefaut.AppliquerA(noeud);
+            if (Document.BoiteParDefaut != null) Document.BoiteParDefaut.AppliquerA(noeud);
             noeud.X = positionCanvas.X;
             noeud.Y = positionCanvas.Y - 14;
             Historique.ExecuterEtPousser(new CommandeCreerNoeud(this, noeud));
@@ -1545,6 +1718,7 @@ namespace Mentalo.Vue
             {
                 _selectionLien.DefinirSelection(false);
                 _selectionLien = null;
+                MettreAJourPoigneeCourbure();
             }
             foreach (NoeudVisuel v in _selectionnes)
                 if (!ensemble.Contains(v)) v.DefinirSelection(false);
@@ -1585,6 +1759,7 @@ namespace Mentalo.Vue
             if (_selectionLien != null) _selectionLien.DefinirSelection(false);
             _selectionLien = visuel;
             if (_selectionLien != null) _selectionLien.DefinirSelection(true);
+            MettreAJourPoigneeCourbure();
             SignalerFormatCible();
         }
 
@@ -1623,6 +1798,9 @@ namespace Mentalo.Vue
             copie.Epaisseur = source.Epaisseur;
             copie.Trait = source.Trait;
             copie.Fleche = source.Fleche;
+            copie.Trace = source.Trace;
+            copie.Courbure = source.Courbure;
+            copie.Etiquette = source.Etiquette;
             return copie;
         }
 
@@ -2239,6 +2417,144 @@ namespace Mentalo.Vue
         public int NbSelectionnes { get { return _selectionnes.Count; } }
         public Rect RectangleDuNoeud(Noeud noeud) { return RectangleNoeud(noeud); }
 
+        // --- API pour l'export -------------------------------------------------------------
+
+        /// <summary>Le cadre mesuré d'un groupe, ou Rect.Empty s'il n'est pas affiché.</summary>
+        public Rect RectangleDuGroupe(Groupe groupe)
+        {
+            Rectangle cadre;
+            if (_visuelsGroupes.TryGetValue(groupe, out cadre) && cadre.Visibility == Visibility.Visible)
+                return new Rect(Canvas.GetLeft(cadre), Canvas.GetTop(cadre), cadre.Width, cadre.Height);
+            return Rect.Empty;
+        }
+
+        /// <summary>Les points d'ancrage d'un lien tel qu'il est tracé à l'écran.</summary>
+        public bool PointsLien(Lien lien, out Point a, out Point b)
+        {
+            a = new Point();
+            b = new Point();
+            Rect rectSource, rectCible;
+            if (!RectangleExtremite(lien.SourceId, out rectSource)
+                || !RectangleExtremite(lien.CibleId, out rectCible)) return false;
+            a = PointAncrage(rectSource, Centre(rectCible));
+            b = PointAncrage(rectCible, Centre(rectSource));
+            return true;
+        }
+
+        /// <summary>L'emprise du contenu (boîtes et cadres de groupes), sans marge.</summary>
+        public Rect BornesContenu()
+        {
+            Rect bornes = Rect.Empty;
+            foreach (Noeud n in Document.Noeuds)
+                bornes.Union(RectangleNoeud(n));
+            foreach (Groupe g in Document.Groupes)
+            {
+                Rect cadre = RectangleDuGroupe(g);
+                if (cadre != Rect.Empty) bornes.Union(cadre);
+            }
+            return bornes;
+        }
+
+        /// <summary>Rend la carte en PNG (échelle 2×, fond du tableau compris).
+        /// Renvoie faux avec un message si la carte est vide ou si l'écriture échoue.</summary>
+        public bool ExporterPng(string chemin, out string erreur)
+        {
+            erreur = null;
+            Rect bornes = BornesContenu();
+            if (bornes == Rect.Empty)
+            {
+                erreur = "La carte est vide : rien à exporter.";
+                return false;
+            }
+            bornes.Inflate(30, 30);
+
+            // Les artefacts d'interface ne font pas partie de la carte.
+            foreach (NoeudVisuel v in _selectionnes) v.DefinirSelection(false);
+            if (_selectionLien != null) _selectionLien.DefinirSelection(false);
+            Visibility gripAvant = _grip.Visibility;
+            Visibility courbureAvant = _poigneeCourbure.Visibility;
+            _grip.Visibility = Visibility.Collapsed;
+            _poigneeCourbure.Visibility = Visibility.Collapsed;
+            // Le rendu se fait dans le repère du canevas : on neutralise pan et zoom.
+            double echelleAvant = _echelle.ScaleX, txAvant = _translation.X, tyAvant = _translation.Y;
+            _echelle.ScaleX = 1; _echelle.ScaleY = 1;
+            _translation.X = 0; _translation.Y = 0;
+
+            try
+            {
+                double echelle = Math.Min(2.0, 8000.0 / Math.Max(bornes.Width, bornes.Height));
+                int largeur = Math.Max(1, (int)Math.Ceiling(bornes.Width * echelle));
+                int hauteur = Math.Max(1, (int)Math.Ceiling(bornes.Height * echelle));
+
+                DrawingVisual dessin = new DrawingVisual();
+                using (DrawingContext contexte = dessin.RenderOpen())
+                {
+                    contexte.DrawRectangle(Background, null, new Rect(0, 0, largeur, hauteur));
+                    VisualBrush brosse = new VisualBrush(_canvas);
+                    brosse.ViewboxUnits = BrushMappingMode.Absolute;
+                    brosse.Viewbox = bornes;
+                    brosse.Stretch = Stretch.Fill;
+                    contexte.DrawRectangle(brosse, null, new Rect(0, 0, largeur, hauteur));
+                }
+                RenderTargetBitmap rendu = new RenderTargetBitmap(largeur, hauteur, 96, 96, PixelFormats.Pbgra32);
+                rendu.Render(dessin);
+                PngBitmapEncoder encodeur = new PngBitmapEncoder();
+                encodeur.Frames.Add(BitmapFrame.Create(rendu));
+                using (FileStream flux = new FileStream(chemin, FileMode.Create))
+                    encodeur.Save(flux);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                erreur = ex.Message;
+                return false;
+            }
+            finally
+            {
+                _echelle.ScaleX = echelleAvant; _echelle.ScaleY = echelleAvant;
+                _translation.X = txAvant; _translation.Y = tyAvant;
+                _grip.Visibility = gripAvant;
+                _poigneeCourbure.Visibility = courbureAvant;
+                foreach (NoeudVisuel v in _selectionnes) v.DefinirSelection(true);
+                if (_selectionLien != null) _selectionLien.DefinirSelection(true);
+                SignalerVue();
+            }
+        }
+
+        /// <summary>Ajoute d'un bloc (une seule annulation) les boîtes et liens d'un import,
+        /// puis les sélectionne.</summary>
+        public void ImporterArbre(List<Noeud> noeuds, List<Lien> liens)
+        {
+            if (_mode == "lecture" || noeuds.Count == 0) return;
+            List<ICommande> commandes = new List<ICommande>();
+            foreach (Noeud n in noeuds)
+            {
+                if (Document.BoiteParDefaut != null) Document.BoiteParDefaut.AppliquerA(n);
+                commandes.Add(new CommandeCreerNoeud(this, n));
+            }
+            foreach (Lien l in liens)
+            {
+                // Les liens importés suivent les défauts du fichier, sauf la flèche
+                // (l'import oriente déjà parent → enfant).
+                Lien gabarit = Document.NouveauLien();
+                l.Couleur = gabarit.Couleur;
+                l.Epaisseur = gabarit.Epaisseur;
+                l.Trait = gabarit.Trait;
+                l.Trace = gabarit.Trace;
+                l.Courbure = gabarit.Courbure;
+                commandes.Add(new CommandeCreerLien(this, l));
+            }
+            if (commandes.Count == 1) Historique.ExecuterEtPousser(commandes[0]);
+            else Historique.ExecuterEtPousser(new CommandeComposite(commandes));
+            List<NoeudVisuel> visuels = new List<NoeudVisuel>();
+            foreach (Noeud n in noeuds)
+            {
+                NoeudVisuel visuel;
+                if (_visuels.TryGetValue(n, out visuel)) visuels.Add(visuel);
+            }
+            SelectionnerEnsemble(visuels, visuels.Count > 0 ? visuels[0] : null);
+        }
+
         // --- API pour la barre des liens ---------------------------------------------------
 
         public Lien LienSelectionne
@@ -2256,6 +2572,21 @@ namespace Mentalo.Vue
                 epaisseur.HasValue ? epaisseur.Value : lien.Epaisseur,
                 trait ?? lien.Trait,
                 fleche ?? lien.Fleche);
+        }
+
+        public void AppliquerTraceLienSelection(string trace)
+        {
+            if (_selectionLien == null || _mode == "lecture") return;
+            ChangerTraceLien(_selectionLien.Modele, trace);
+        }
+
+        public void AppliquerEtiquetteLienSelection(string texte)
+        {
+            if (_selectionLien == null || _mode == "lecture") return;
+            Lien lien = _selectionLien.Modele;
+            string propre = (texte ?? "").Trim();
+            if (propre == (lien.Etiquette ?? "")) return;
+            Historique.ExecuterEtPousser(new CommandeModifierEtiquetteLien(this, lien, propre));
         }
 
         public void ChoisirCouleurLienPersonnalisee()
@@ -2288,6 +2619,10 @@ namespace Mentalo.Vue
             Background = ConstruireFond(CouleurFondEffective(), Document.FondMotif);
             foreach (KeyValuePair<Groupe, TextBlock> kv in _titresGroupes)
                 AppliquerStyleVisuelGroupe(kv.Key);
+            // Les étiquettes de liens portent le fond du tableau pour « couper » le trait.
+            LienVisuel.FondEtiquette = CouleurFondEffective();
+            foreach (KeyValuePair<Lien, LienVisuel> kv in _visuelsLiens)
+                kv.Value.AppliquerStyle();
         }
 
         private static Brush ConstruireFond(Color fond, string motif)
@@ -2373,7 +2708,7 @@ namespace Mentalo.Vue
         public void GrouperSelection()
         {
             if (_selectionnes.Count < 2) return;
-            Groupe groupe = new Groupe();
+            Groupe groupe = Document.NouveauGroupe();
             Dictionary<Groupe, List<string>> retraits = new Dictionary<Groupe, List<string>>();
             foreach (NoeudVisuel v in _selectionnes)
             {
@@ -2539,7 +2874,7 @@ namespace Mentalo.Vue
             }
 
             Noeud noeud = new Noeud();
-            if (_styleParDefaut != null) _styleParDefaut.AppliquerA(noeud);
+            if (Document.BoiteParDefaut != null) Document.BoiteParDefaut.AppliquerA(noeud);
             noeud.ImageDonnees = donnees;
             noeud.ImageExtension = string.IsNullOrEmpty(extension) ? ".png" : extension;
             double facteur = Math.Min(1.0, 320.0 / Math.Max(image.PixelWidth, (double)image.PixelHeight));
@@ -2817,7 +3152,8 @@ namespace Mentalo.Vue
         private void AppliquerPropriete(string propriete, object valeur)
         {
             if (propriete == "fond" || propriete == "bordure-couleur" || propriete == "bordure-epaisseur"
-                || propriete == "bordure-trait" || propriete == "rayon")
+                || propriete == "bordure-trait" || propriete == "rayon"
+                || propriete == "ombre" || propriete == "opacite")
                 AppliquerStyleBoite(propriete, valeur);
             else
                 AppliquerFormatTexte(propriete, valeur);
@@ -2835,6 +3171,8 @@ namespace Mentalo.Vue
                 case "bordure-epaisseur": style.BordureEpaisseur = (double)valeur; break;
                 case "bordure-trait": style.BordureTrait = (string)valeur; break;
                 case "rayon": style.Rayon = (double)valeur; break;
+                case "ombre": style.Ombre = (string)valeur; break;
+                case "opacite": style.Opacite = (double)valeur; break;
             }
             if (style.EgalA(noeud)) return;
             Historique.ExecuterEtPousser(new CommandeModifierStyleNoeud(this, noeud, style));
@@ -3104,6 +3442,20 @@ namespace Mentalo.Vue
                 AjouterChoixNombre(coins, "rayon", "Très arrondis", 12, etat.Rayon);
                 menu.Items.Add(coins);
 
+                MenuItem ombre = new MenuItem { Header = "Ombre" };
+                AjouterChoixValeur(ombre, "ombre", "Aucune", "aucune", etat.Ombre);
+                AjouterChoixValeur(ombre, "ombre", "Légère", "legere", etat.Ombre);
+                AjouterChoixValeur(ombre, "ombre", "Marquée", "marquee", etat.Ombre);
+                menu.Items.Add(ombre);
+
+                MenuItem opacite = new MenuItem { Header = "Opacité" };
+                AjouterChoixNombre(opacite, "opacite", "100 %", 1, etat.Opacite);
+                AjouterChoixNombre(opacite, "opacite", "85 %", 0.85, etat.Opacite);
+                AjouterChoixNombre(opacite, "opacite", "70 %", 0.7, etat.Opacite);
+                AjouterChoixNombre(opacite, "opacite", "50 %", 0.5, etat.Opacite);
+                AjouterChoixNombre(opacite, "opacite", "30 %", 0.3, etat.Opacite);
+                menu.Items.Add(opacite);
+
                 menu.Items.Add(new Separator());
                 MenuItem insererImageBoite = new MenuItem { Header = "Insérer une image dans la boîte…" };
                 insererImageBoite.Click += delegate { InsererImageDansBoite(); };
@@ -3227,10 +3579,16 @@ namespace Mentalo.Vue
                         new CommandeModifierStyleNoeud(this, _selection.Modele, _stylePresse.Cloner()));
                 };
                 menu.Items.Add(collerStyle);
-                MenuItem styleDefaut = new MenuItem { Header = "Utiliser ce style pour les nouvelles boîtes" };
+                MenuItem styleDefaut = new MenuItem
+                {
+                    Header = "Utiliser ce style pour les nouvelles boîtes",
+                    ToolTip = "Devient le style par défaut du fichier (visible dans Fichier > Préférences de fichier)"
+                };
                 styleDefaut.Click += delegate
                 {
-                    if (_selection != null) _styleParDefaut = StyleBoite.Depuis(_selection.Modele);
+                    if (_selection == null) return;
+                    Document.BoiteParDefaut = StyleBoite.Depuis(_selection.Modele);
+                    SignalerModification();
                 };
                 menu.Items.Add(styleDefaut);
 

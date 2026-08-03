@@ -20,8 +20,8 @@ namespace Mentalo.Vue
             dialogue.Title = "Préférences de fichier";
             dialogue.Owner = proprietaire;
             dialogue.WindowStartupLocation = WindowStartupLocation.CenterOwner;
-            dialogue.Width = 520;
-            dialogue.Height = 460;
+            dialogue.Width = 560;
+            dialogue.Height = 480;
             dialogue.ResizeMode = ResizeMode.NoResize;
             dialogue.ShowInTaskbar = false;
 
@@ -151,6 +151,77 @@ namespace Mentalo.Vue
             AjouterLigne(texte, 3, "Couleur par défaut :", couleur);
             onglets.Items.Add(new TabItem { Header = "Texte", Content = texte });
 
+            // --- Boîtes (style des nouvelles boîtes) -----------------------------------------
+            StyleBoite styleBoite = document.BoiteParDefaut != null
+                ? document.BoiteParDefaut : StyleBoite.Depuis(new Noeud());
+            Grid boites = NouvelleGrille(7);
+            ComboBox fondBoite = ComboPalette(document, styleBoite.Fond, "Blanc", "#FFFFFF", true);
+            AjouterLigne(boites, 0, "Fond :", AvecAutre(document, fondBoite));
+            ComboBox bordureBoite = ComboPalette(document, styleBoite.BordureCouleur, "Gris sable (défaut)", "#B8B2A7", false);
+            AjouterLigne(boites, 1, "Couleur de bordure :", AvecAutre(document, bordureBoite));
+            ComboBox epaisseurBoite = ComboNombres(
+                new double[] { 1, 1.5, 2, 3, 5 },
+                new string[] { "Fine (1)", "Normale (1,5)", "Moyenne (2)", "Épaisse (3)", "Très épaisse (5)" },
+                styleBoite.BordureEpaisseur);
+            AjouterLigne(boites, 2, "Épaisseur de bordure :", epaisseurBoite);
+            ComboBox traitBoite = ComboChoix(new string[,]
+                { { "Plein", "plein" }, { "Tirets", "tirets" }, { "Pointillé", "points" }, { "Aucune", "aucune" } },
+                styleBoite.BordureTrait);
+            AjouterLigne(boites, 3, "Trait de bordure :", traitBoite);
+            ComboBox coinsBoite = ComboNombres(
+                new double[] { 0, 5, 12 },
+                new string[] { "Carrés", "Arrondis", "Très arrondis" },
+                styleBoite.Rayon);
+            AjouterLigne(boites, 4, "Coins :", coinsBoite);
+            ComboBox ombreBoite = ComboChoix(new string[,]
+                { { "Aucune", "aucune" }, { "Légère", "legere" }, { "Marquée", "marquee" } },
+                string.IsNullOrEmpty(styleBoite.Ombre) ? "legere" : styleBoite.Ombre);
+            AjouterLigne(boites, 5, "Ombre :", ombreBoite);
+            ComboBox opaciteBoite = ComboNombres(
+                new double[] { 1, 0.85, 0.7, 0.5, 0.3 },
+                new string[] { "100 %", "85 %", "70 %", "50 %", "30 %" },
+                styleBoite.Opacite > 0 ? styleBoite.Opacite : 1);
+            AjouterLigne(boites, 6, "Opacité :", opaciteBoite);
+            onglets.Items.Add(new TabItem { Header = "Boîtes", Content = boites });
+
+            // --- Liens (style des nouveaux liens) --------------------------------------------
+            Grid liensGrille = NouvelleGrille(5);
+            ComboBox couleurLien = ComboPalette(document, document.LienCouleurDefaut, "Gris (défaut)", "#6A665E", false);
+            AjouterLigne(liensGrille, 0, "Couleur :", AvecAutre(document, couleurLien));
+            ComboBox epaisseurLien = ComboNombres(
+                new double[] { 1, 2, 3, 5 },
+                new string[] { "Fin (1)", "Normal (2)", "Épais (3)", "Très épais (5)" },
+                document.LienEpaisseurDefaut);
+            AjouterLigne(liensGrille, 1, "Épaisseur :", epaisseurLien);
+            ComboBox traitLien = ComboChoix(new string[,]
+                { { "Plein", "plein" }, { "Tirets", "tirets" }, { "Pointillé", "points" } },
+                document.LienTraitDefaut);
+            AjouterLigne(liensGrille, 2, "Trait :", traitLien);
+            ComboBox flecheLien = ComboChoix(new string[,]
+                { { "Sans flèche", "aucune" }, { "Vers la cible", "simple" }, { "Les deux sens", "double" } },
+                document.LienFlecheDefaut);
+            AjouterLigne(liensGrille, 3, "Flèches :", flecheLien);
+            ComboBox traceLien = ComboChoix(new string[,]
+                { { "Droit", "droit" }, { "Courbe", "courbe" }, { "Équerre", "equerre" } },
+                document.LienTraceDefaut);
+            AjouterLigne(liensGrille, 4, "Tracé :", traceLien);
+            onglets.Items.Add(new TabItem { Header = "Liens", Content = liensGrille });
+
+            // --- Groupes (style des nouveaux groupes) ----------------------------------------
+            Grid groupes = NouvelleGrille(3);
+            ComboBox couleurGroupe = ComboPalette(document, document.GroupeCouleurDefaut, "Gris bleuté (défaut)", "#8A94A8", false);
+            AjouterLigne(groupes, 0, "Couleur du cadre :", AvecAutre(document, couleurGroupe));
+            ComboBox traitGroupe = ComboChoix(new string[,]
+                { { "Tirets", "tirets" }, { "Plein", "plein" }, { "Pointillé", "points" } },
+                document.GroupeTraitDefaut);
+            AjouterLigne(groupes, 1, "Trait du cadre :", traitGroupe);
+            ComboBox epaisseurGroupe = ComboNombres(
+                new double[] { 1, 1.5, 2.5, 4 },
+                new string[] { "Fine (1)", "Normale (1,5)", "Moyenne (2,5)", "Épaisse (4)" },
+                document.GroupeEpaisseurDefaut);
+            AjouterLigne(groupes, 2, "Épaisseur du cadre :", epaisseurGroupe);
+            onglets.Items.Add(new TabItem { Header = "Groupes", Content = groupes });
+
             // --- Boutons -------------------------------------------------------------------
             StackPanel boutons = new StackPanel
             {
@@ -197,10 +268,119 @@ namespace Mentalo.Vue
             ComboBoxItem choixCouleur = couleur.SelectedItem as ComboBoxItem;
             if (choixCouleur != null && choixCouleur.Tag is string)
                 document.CouleurParDefaut = (string)choixCouleur.Tag;
+
+            StyleBoite nouveauStyle = new StyleBoite();
+            nouveauStyle.Fond = TagChaine(fondBoite) ?? styleBoite.Fond;
+            nouveauStyle.BordureCouleur = TagChaine(bordureBoite) ?? styleBoite.BordureCouleur;
+            nouveauStyle.BordureEpaisseur = TagNombre(epaisseurBoite, styleBoite.BordureEpaisseur);
+            nouveauStyle.BordureTrait = TagChaine(traitBoite) ?? styleBoite.BordureTrait;
+            nouveauStyle.Rayon = TagNombre(coinsBoite, styleBoite.Rayon);
+            nouveauStyle.Ombre = TagChaine(ombreBoite) ?? styleBoite.Ombre;
+            nouveauStyle.Opacite = TagNombre(opaciteBoite, styleBoite.Opacite);
+            document.BoiteParDefaut = nouveauStyle;
+
+            document.LienCouleurDefaut = TagChaine(couleurLien) ?? document.LienCouleurDefaut;
+            document.LienEpaisseurDefaut = TagNombre(epaisseurLien, document.LienEpaisseurDefaut);
+            document.LienTraitDefaut = TagChaine(traitLien) ?? document.LienTraitDefaut;
+            document.LienFlecheDefaut = TagChaine(flecheLien) ?? document.LienFlecheDefaut;
+            document.LienTraceDefaut = TagChaine(traceLien) ?? document.LienTraceDefaut;
+
+            document.GroupeCouleurDefaut = TagChaine(couleurGroupe) ?? document.GroupeCouleurDefaut;
+            document.GroupeTraitDefaut = TagChaine(traitGroupe) ?? document.GroupeTraitDefaut;
+            document.GroupeEpaisseurDefaut = TagNombre(epaisseurGroupe, document.GroupeEpaisseurDefaut);
             return true;
         }
 
         // ------------------------------------------------------------------ aides
+
+        /// <summary>Palette complète (pastels + vives + couleurs du fichier), avec une
+        /// entrée « défaut » en tête ; la valeur actuelle est ajoutée si elle en sort.</summary>
+        private static ComboBox ComboPalette(DocumentCarte document, string actuel,
+            string premierNom, string premierHexa, bool avecTransparent)
+        {
+            ComboBox combo = new ComboBox { Width = 180, HorizontalAlignment = HorizontalAlignment.Left };
+            combo.Items.Add(ElementCouleur(premierNom, premierHexa));
+            if (avecTransparent) combo.Items.Add(ElementCouleur("Transparent", "Transparent"));
+            for (int i = 0; i < TexteRiche.Surlignages.GetLength(0); i++)
+                combo.Items.Add(ElementCouleur(TexteRiche.Surlignages[i, 0], TexteRiche.Surlignages[i, 1]));
+            for (int i = 0; i < TexteRiche.Couleurs.GetLength(0); i++)
+                combo.Items.Add(ElementCouleur(TexteRiche.Couleurs[i, 0], TexteRiche.Couleurs[i, 1]));
+            foreach (string hexa in document.CouleursPersonnalisees)
+                combo.Items.Add(ElementCouleur(hexa, hexa));
+            SelectionnerCouleur(combo, actuel);
+            if (combo.SelectedIndex < 0 && !string.IsNullOrEmpty(actuel))
+            {
+                combo.Items.Add(ElementCouleur(actuel, actuel));
+                combo.SelectedIndex = combo.Items.Count - 1;
+            }
+            if (combo.SelectedIndex < 0) combo.SelectedIndex = 0;
+            return combo;
+        }
+
+        /// <summary>Ajoute un bouton « Autre… » (sélecteur de couleur maison) à côté d'un combo.</summary>
+        private static StackPanel AvecAutre(DocumentCarte document, ComboBox combo)
+        {
+            StackPanel ligne = new StackPanel { Orientation = Orientation.Horizontal };
+            ligne.Children.Add(combo);
+            Button autre = new Button { Content = "Autre…", Margin = new Thickness(6, 0, 0, 0), Padding = new Thickness(8, 0, 8, 0) };
+            autre.Click += delegate
+            {
+                string hexa = ChoisirCouleur();
+                if (hexa == null) return;
+                document.AjouterCouleurPersonnalisee(hexa);
+                combo.Items.Add(ElementCouleur(hexa, hexa));
+                combo.SelectedIndex = combo.Items.Count - 1;
+            };
+            ligne.Children.Add(autre);
+            return ligne;
+        }
+
+        /// <summary>Combo à choix nommés (paires libellé / valeur de stockage).</summary>
+        private static ComboBox ComboChoix(string[,] paires, string actuel)
+        {
+            ComboBox combo = new ComboBox { Width = 140, HorizontalAlignment = HorizontalAlignment.Left };
+            for (int i = 0; i < paires.GetLength(0); i++)
+                combo.Items.Add(new ComboBoxItem { Content = paires[i, 0], Tag = paires[i, 1] });
+            SelectionnerCouleur(combo, actuel);
+            if (combo.SelectedIndex < 0) combo.SelectedIndex = 0;
+            return combo;
+        }
+
+        /// <summary>Combo de valeurs numériques nommées ; la valeur actuelle est ajoutée
+        /// telle quelle si elle ne figure pas dans la liste.</summary>
+        private static ComboBox ComboNombres(double[] valeurs, string[] noms, double actuel)
+        {
+            ComboBox combo = new ComboBox { Width = 140, HorizontalAlignment = HorizontalAlignment.Left };
+            for (int i = 0; i < valeurs.Length; i++)
+            {
+                ComboBoxItem element = new ComboBoxItem { Content = noms[i], Tag = valeurs[i] };
+                combo.Items.Add(element);
+                if (Math.Abs(valeurs[i] - actuel) < 0.01) combo.SelectedItem = element;
+            }
+            if (combo.SelectedIndex < 0)
+            {
+                ComboBoxItem element = new ComboBoxItem
+                {
+                    Content = actuel.ToString(CultureInfo.CurrentCulture),
+                    Tag = actuel
+                };
+                combo.Items.Add(element);
+                combo.SelectedItem = element;
+            }
+            return combo;
+        }
+
+        private static string TagChaine(ComboBox combo)
+        {
+            ComboBoxItem choix = combo.SelectedItem as ComboBoxItem;
+            return choix == null ? null : choix.Tag as string;
+        }
+
+        private static double TagNombre(ComboBox combo, double repli)
+        {
+            ComboBoxItem choix = combo.SelectedItem as ComboBoxItem;
+            return choix != null && choix.Tag is double ? (double)choix.Tag : repli;
+        }
 
         private static FrameworkElement ConstruireMiniature(
             System.Collections.Generic.List<Rect> rectangles, DocumentCarte document)

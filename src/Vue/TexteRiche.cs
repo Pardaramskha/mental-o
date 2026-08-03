@@ -25,6 +25,8 @@ namespace Mentalo.Vue
         public double BordureEpaisseur = 1.5;
         public string BordureTrait = "plein";
         public double Rayon = 5;
+        public string Ombre = "legere";
+        public double Opacite = 1;
     }
 
     /// <summary>Conversions entre les segments du modèle et les objets texte de WPF,

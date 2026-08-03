@@ -31,6 +31,8 @@ namespace Mentalo.Modele
         public double BordureEpaisseur { get; set; }
         public string BordureTrait { get; set; } // "plein" | "tirets" | "points" | "aucune"
         public double Rayon { get; set; }        // coins arrondis
+        public string Ombre { get; set; }        // "aucune" | "legere" | "marquee"
+        public double Opacite { get; set; }      // 0,3 à 1 (1 = opaque)
 
         public Noeud()
         {
@@ -43,6 +45,8 @@ namespace Mentalo.Modele
             BordureEpaisseur = 1.5;
             BordureTrait = "plein";
             Rayon = 5;
+            Ombre = "legere";
+            Opacite = 1;
         }
 
         /// <summary>Le texte sans mise en forme (recherche, test de vacuité, compatibilité).</summary>

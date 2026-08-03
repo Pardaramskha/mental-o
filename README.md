@@ -59,12 +59,14 @@ Ne demande que le .NET Framework 4.8, inclus dans Windows 10/11 — aucune dépe
 | Styles favoris | Clic droit > Styles favoris — enregistrer, appliquer à la sélection, retirer |
 | Recentrer la carte | Ctrl+R |
 
-Les cartes sont enregistrées au format `.zeubi` (archive ZIP contenant un `document.json`).
+Les cartes sont enregistrées au format `.tea` (archive ZIP contenant un `document.json`).
+L'ancienne extension `.zeubi` s'ouvre toujours. Fichier > Exporter propose PNG, SVG et
+Markdown ; Fichier > Importer un texte à puces transforme une liste indentée en arbre de boîtes.
 
 ## Outils
 
-- `outils\generer-icones.bat` — régénère `ressources\mentalo.ico` et `ressources\fichier-zeubi.ico`.
-- `outils\associer-zeubi.bat` — associe `.zeubi` à Mental-o (icône + double-clic dans l'Explorateur ; registre utilisateur uniquement).
-- `outils\dissocier-zeubi.bat` — annule cette association.
+- `outils\generer-icones.bat` — régénère `ressources\mentalo.ico` et `ressources\fichier-tea.ico`.
+- `outils\associer-tea.bat` — associe `.tea` (et `.zeubi`) à Mental-o (icône + double-clic dans l'Explorateur ; registre utilisateur uniquement). Le menu Fichier > « Associer les fichiers .tea » fait la même chose depuis l'appli.
+- `outils\dissocier-tea.bat` — annule ces associations.
 
 Voir `PLAN.md` pour la feuille de route.

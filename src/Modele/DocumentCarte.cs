@@ -26,6 +26,42 @@ namespace Mentalo.Modele
         public string DateCreation { get; set; }      // "aaaa-mm-jj hh:mm", posée au premier enregistrement
         public string DateModification { get; set; }  // mise à jour à chaque enregistrement
 
+        // Styles par défaut des nouveaux éléments (Fichier > Préférences de fichier),
+        // enregistrés dans le .tea. « Utiliser ce style pour les nouvelles boîtes »
+        // (clic droit) écrit dans BoiteParDefaut.
+        public StyleBoite BoiteParDefaut { get; set; }
+        public string LienCouleurDefaut { get; set; }
+        public double LienEpaisseurDefaut { get; set; }
+        public string LienTraitDefaut { get; set; }   // "plein" | "tirets" | "points"
+        public string LienFlecheDefaut { get; set; }  // "aucune" | "simple" | "double"
+        public string LienTraceDefaut { get; set; }   // "droit" | "courbe" | "equerre"
+        public string GroupeCouleurDefaut { get; set; }
+        public string GroupeTraitDefaut { get; set; } // "tirets" | "plein" | "points"
+        public double GroupeEpaisseurDefaut { get; set; }
+
+        /// <summary>Fabrique un lien neuf portant les défauts du fichier.</summary>
+        public Lien NouveauLien()
+        {
+            Lien lien = new Lien();
+            if (!string.IsNullOrEmpty(LienCouleurDefaut)) lien.Couleur = LienCouleurDefaut;
+            if (LienEpaisseurDefaut > 0) lien.Epaisseur = LienEpaisseurDefaut;
+            if (!string.IsNullOrEmpty(LienTraitDefaut)) lien.Trait = LienTraitDefaut;
+            if (!string.IsNullOrEmpty(LienFlecheDefaut)) lien.Fleche = LienFlecheDefaut;
+            if (!string.IsNullOrEmpty(LienTraceDefaut)) lien.Trace = LienTraceDefaut;
+            if (lien.Trace == "courbe") lien.Courbure = 46;
+            return lien;
+        }
+
+        /// <summary>Fabrique un groupe neuf portant les défauts du fichier.</summary>
+        public Groupe NouveauGroupe()
+        {
+            Groupe groupe = new Groupe();
+            if (!string.IsNullOrEmpty(GroupeCouleurDefaut)) groupe.Couleur = GroupeCouleurDefaut;
+            if (!string.IsNullOrEmpty(GroupeTraitDefaut)) groupe.BordureTrait = GroupeTraitDefaut;
+            if (GroupeEpaisseurDefaut > 0) groupe.BordureEpaisseur = GroupeEpaisseurDefaut;
+            return groupe;
+        }
+
         public DocumentCarte()
         {
             Noeuds = new List<Noeud>();
@@ -42,6 +78,15 @@ namespace Mentalo.Modele
             Auteur = "";
             DateCreation = "";
             DateModification = "";
+            BoiteParDefaut = StyleBoite.Depuis(new Noeud()); // les défauts « d'usine »
+            LienCouleurDefaut = "#6A665E";
+            LienEpaisseurDefaut = 2;
+            LienTraitDefaut = "plein";
+            LienFlecheDefaut = "aucune";
+            LienTraceDefaut = "droit";
+            GroupeCouleurDefaut = "#8A94A8";
+            GroupeTraitDefaut = "tirets";
+            GroupeEpaisseurDefaut = 1.5;
         }
 
         /// <summary>Ajoute une couleur au répertoire du fichier. Renvoie faux si déjà présente.</summary>

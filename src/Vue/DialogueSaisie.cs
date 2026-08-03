@@ -49,6 +49,102 @@ namespace Mentalo.Vue
             return InterpreterTaille(saisie.Text);
         }
 
+        /// <summary>Demande une ligne de texte libre ; renvoie null si le dialogue est annulé.</summary>
+        public static string DemanderTexte(Window proprietaire, string titre, string invite, string valeurActuelle)
+        {
+            Window dialogue = new Window();
+            dialogue.Title = titre;
+            dialogue.Owner = proprietaire;
+            dialogue.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+            dialogue.SizeToContent = SizeToContent.WidthAndHeight;
+            dialogue.ResizeMode = ResizeMode.NoResize;
+            dialogue.WindowStyle = WindowStyle.ToolWindow;
+            dialogue.ShowInTaskbar = false;
+
+            StackPanel panneau = new StackPanel { Margin = new Thickness(14) };
+            panneau.Children.Add(new TextBlock { Text = invite, Margin = new Thickness(0, 0, 0, 6) });
+            TextBox saisie = new TextBox { Width = 240, HorizontalAlignment = HorizontalAlignment.Left };
+            saisie.Text = valeurActuelle ?? "";
+            panneau.Children.Add(saisie);
+
+            StackPanel boutons = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 12, 0, 0)
+            };
+            Button valider = new Button { Content = "Valider", Width = 80, IsDefault = true, Margin = new Thickness(0, 0, 6, 0) };
+            Button annuler = new Button { Content = "Annuler", Width = 80, IsCancel = true };
+            valider.Click += delegate { dialogue.DialogResult = true; };
+            boutons.Children.Add(valider);
+            boutons.Children.Add(annuler);
+            panneau.Children.Add(boutons);
+
+            dialogue.Content = panneau;
+            saisie.Loaded += delegate { saisie.Focus(); saisie.SelectAll(); };
+
+            if (dialogue.ShowDialog() != true) return null;
+            return saisie.Text;
+        }
+
+        /// <summary>Demande un texte multiligne (import de texte à puces) ;
+        /// renvoie null si le dialogue est annulé. Ctrl+Entrée valide.</summary>
+        public static string DemanderTexteMultiligne(Window proprietaire, string titre, string invite)
+        {
+            Window dialogue = new Window();
+            dialogue.Title = titre;
+            dialogue.Owner = proprietaire;
+            dialogue.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+            dialogue.SizeToContent = SizeToContent.WidthAndHeight;
+            dialogue.ResizeMode = ResizeMode.NoResize;
+            dialogue.WindowStyle = WindowStyle.ToolWindow;
+            dialogue.ShowInTaskbar = false;
+
+            StackPanel panneau = new StackPanel { Margin = new Thickness(14) };
+            panneau.Children.Add(new TextBlock { Text = invite, Margin = new Thickness(0, 0, 0, 8) });
+            TextBox saisie = new TextBox
+            {
+                Width = 460,
+                Height = 260,
+                AcceptsReturn = true,
+                AcceptsTab = true,
+                TextWrapping = TextWrapping.NoWrap,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                FontFamily = new System.Windows.Media.FontFamily("Consolas")
+            };
+            panneau.Children.Add(saisie);
+
+            StackPanel boutons = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 12, 0, 0)
+            };
+            Button valider = new Button { Content = "Importer", Width = 90, Margin = new Thickness(0, 0, 6, 0) };
+            Button annuler = new Button { Content = "Annuler", Width = 80, IsCancel = true };
+            valider.Click += delegate { dialogue.DialogResult = true; };
+            boutons.Children.Add(valider);
+            boutons.Children.Add(annuler);
+            panneau.Children.Add(boutons);
+
+            saisie.PreviewKeyDown += delegate(object expediteur, System.Windows.Input.KeyEventArgs e)
+            {
+                if (e.Key == System.Windows.Input.Key.Enter
+                    && (System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Control) != 0)
+                {
+                    dialogue.DialogResult = true;
+                    e.Handled = true;
+                }
+            };
+
+            dialogue.Content = panneau;
+            saisie.Loaded += delegate { saisie.Focus(); };
+
+            if (dialogue.ShowDialog() != true) return null;
+            return saisie.Text;
+        }
+
         /// <summary>Lit une taille tapée librement (virgule ou point) et la borne entre 6 et 120.</summary>
         public static double? InterpreterTaille(string texte)
         {

@@ -33,6 +33,45 @@ namespace Mentalo.Historique
         public void Annuler() { _toile.AjouterLien(_lien); }
     }
 
+    public class CommandeModifierTraceLien : ICommande
+    {
+        private readonly ToileVue _toile;
+        private readonly Lien _lien;
+        private readonly string _ancienTrace, _nouveauTrace;
+        private readonly double _ancienneCourbure, _nouvelleCourbure;
+
+        public CommandeModifierTraceLien(ToileVue toile, Lien lien, string nouveauTrace, double nouvelleCourbure)
+        {
+            _toile = toile;
+            _lien = lien;
+            _ancienTrace = lien.Trace;
+            _ancienneCourbure = lien.Courbure;
+            _nouveauTrace = nouveauTrace;
+            _nouvelleCourbure = nouvelleCourbure;
+        }
+
+        public void Executer() { _toile.AppliquerTraceLien(_lien, _nouveauTrace, _nouvelleCourbure); }
+        public void Annuler() { _toile.AppliquerTraceLien(_lien, _ancienTrace, _ancienneCourbure); }
+    }
+
+    public class CommandeModifierEtiquetteLien : ICommande
+    {
+        private readonly ToileVue _toile;
+        private readonly Lien _lien;
+        private readonly string _ancienne, _nouvelle;
+
+        public CommandeModifierEtiquetteLien(ToileVue toile, Lien lien, string nouvelle)
+        {
+            _toile = toile;
+            _lien = lien;
+            _ancienne = lien.Etiquette;
+            _nouvelle = nouvelle;
+        }
+
+        public void Executer() { _toile.AppliquerEtiquetteLien(_lien, _nouvelle); }
+        public void Annuler() { _toile.AppliquerEtiquetteLien(_lien, _ancienne); }
+    }
+
     public class CommandeModifierStyleLien : ICommande
     {
         private readonly ToileVue _toile;

@@ -28,6 +28,10 @@ namespace Mentalo.Persistance
         public bool sauvegardeAuto { get; set; }
         public string dateCreation { get; set; }
         public string dateModification { get; set; }
+        // v13+ : styles par défaut des nouveaux éléments (formes compactes « a|b|c »)
+        public string boiteDefaut { get; set; }   // StyleBoite.Serialiser()
+        public string lienDefaut { get; set; }    // couleur|epaisseur|trait|fleche|trace
+        public string groupeDefaut { get; set; }  // couleur|trait|epaisseur
     }
 
     public class GroupeDto
@@ -68,6 +72,9 @@ namespace Mentalo.Persistance
         public double? imageHauteur { get; set; }
         // largeur imposée par l'utilisateur (v7+)
         public double? largeurFixe { get; set; }
+        // v13+
+        public string ombre { get; set; }
+        public double? opacite { get; set; }
     }
 
     public class SegmentDto
@@ -93,15 +100,21 @@ namespace Mentalo.Persistance
         public double epaisseur { get; set; }
         public string trait { get; set; }
         public string fleche { get; set; }
+        // v13+
+        public string trace { get; set; }
+        public double? courbure { get; set; }
+        public string etiquette { get; set; }
     }
 
-    /// <summary>Lecture/écriture des fichiers .zeubi : une archive ZIP contenant document.json
-    /// (et, à partir de la v0.5, un dossier images/).</summary>
+    /// <summary>Lecture/écriture des fichiers .tea : une archive ZIP contenant document.json
+    /// (et, à partir de la v0.5, un dossier images/). L'ancienne extension .zeubi reste
+    /// lisible — même format, seul le nom a infusé.</summary>
     public static class Fichier
     {
-        public const string Extension = ".zeubi";
-        public const string Filtre = "Carte Mental-o (*.zeubi)|*.zeubi|Tous les fichiers (*.*)|*.*";
-        private const int VersionFormat = 12; // … v10 titres ; v11 fond + identité ; v12 styles groupes + alignements de ligne + dates
+        public const string Extension = ".tea";
+        public const string FiltreOuverture = "Cartes Mental-o (*.tea;*.zeubi)|*.tea;*.zeubi|Tous les fichiers (*.*)|*.*";
+        public const string FiltreEnregistrement = "Carte Mental-o (*.tea)|*.tea|Tous les fichiers (*.*)|*.*";
+        private const int VersionFormat = 13; // … v11 fond + identité ; v12 styles groupes + dates ; v13 tracés/étiquettes de liens + ombres/opacité
 
         public static void Enregistrer(DocumentCarte document, string chemin)
         {
@@ -125,6 +138,13 @@ namespace Mentalo.Persistance
             dto.sauvegardeAuto = document.SauvegardeAuto;
             dto.dateCreation = document.DateCreation;
             dto.dateModification = document.DateModification;
+            if (document.BoiteParDefaut != null)
+                dto.boiteDefaut = document.BoiteParDefaut.Serialiser();
+            dto.lienDefaut = document.LienCouleurDefaut + "|"
+                + document.LienEpaisseurDefaut.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|"
+                + document.LienTraitDefaut + "|" + document.LienFlecheDefaut + "|" + document.LienTraceDefaut;
+            dto.groupeDefaut = document.GroupeCouleurDefaut + "|" + document.GroupeTraitDefaut + "|"
+                + document.GroupeEpaisseurDefaut.ToString(System.Globalization.CultureInfo.InvariantCulture);
             foreach (Noeud n in document.Noeuds)
             {
                 NoeudDto nd = new NoeudDto();
@@ -138,6 +158,8 @@ namespace Mentalo.Persistance
                 nd.bordEpaisseur = n.BordureEpaisseur;
                 nd.bordTrait = n.BordureTrait;
                 nd.rayon = n.Rayon;
+                if (n.Ombre != "legere") nd.ombre = n.Ombre;
+                if (n.Opacite > 0 && n.Opacite < 1) nd.opacite = n.Opacite;
                 if (n.EstImage)
                 {
                     nd.imageFichier = "images/" + n.Id + (n.ImageExtension ?? ".png");
@@ -177,6 +199,9 @@ namespace Mentalo.Persistance
                 ld.epaisseur = l.Epaisseur;
                 ld.trait = l.Trait;
                 ld.fleche = l.Fleche;
+                if (l.Trace != "droit") ld.trace = l.Trace;
+                if (l.Courbure != 0) ld.courbure = l.Courbure;
+                if (!string.IsNullOrEmpty(l.Etiquette)) ld.etiquette = l.Etiquette;
                 dto.liens.Add(ld);
             }
 
@@ -234,6 +259,36 @@ namespace Mentalo.Persistance
                 document.SauvegardeAuto = dto.sauvegardeAuto;
                 if (!string.IsNullOrEmpty(dto.dateCreation)) document.DateCreation = dto.dateCreation;
                 if (!string.IsNullOrEmpty(dto.dateModification)) document.DateModification = dto.dateModification;
+                StyleBoite boiteDefaut = StyleBoite.Deserialiser(dto.boiteDefaut);
+                if (boiteDefaut != null) document.BoiteParDefaut = boiteDefaut;
+                if (!string.IsNullOrEmpty(dto.lienDefaut))
+                {
+                    string[] parties = dto.lienDefaut.Split('|');
+                    if (parties.Length == 5)
+                    {
+                        if (!string.IsNullOrEmpty(parties[0])) document.LienCouleurDefaut = parties[0];
+                        double epaisseur;
+                        if (double.TryParse(parties[1], System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out epaisseur) && epaisseur > 0)
+                            document.LienEpaisseurDefaut = epaisseur;
+                        if (!string.IsNullOrEmpty(parties[2])) document.LienTraitDefaut = parties[2];
+                        if (!string.IsNullOrEmpty(parties[3])) document.LienFlecheDefaut = parties[3];
+                        if (!string.IsNullOrEmpty(parties[4])) document.LienTraceDefaut = parties[4];
+                    }
+                }
+                if (!string.IsNullOrEmpty(dto.groupeDefaut))
+                {
+                    string[] parties = dto.groupeDefaut.Split('|');
+                    if (parties.Length == 3)
+                    {
+                        if (!string.IsNullOrEmpty(parties[0])) document.GroupeCouleurDefaut = parties[0];
+                        if (!string.IsNullOrEmpty(parties[1])) document.GroupeTraitDefaut = parties[1];
+                        double epaisseur;
+                        if (double.TryParse(parties[2], System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out epaisseur) && epaisseur > 0)
+                            document.GroupeEpaisseurDefaut = epaisseur;
+                    }
+                }
             }
             if (dto != null && dto.couleursPerso != null)
             {
@@ -254,6 +309,8 @@ namespace Mentalo.Persistance
                     if (nd.bordEpaisseur.HasValue) n.BordureEpaisseur = nd.bordEpaisseur.Value;
                     if (!string.IsNullOrEmpty(nd.bordTrait)) n.BordureTrait = nd.bordTrait;
                     if (nd.rayon.HasValue) n.Rayon = nd.rayon.Value;
+                    if (!string.IsNullOrEmpty(nd.ombre)) n.Ombre = nd.ombre;
+                    if (nd.opacite.HasValue && nd.opacite.Value > 0) n.Opacite = nd.opacite.Value;
                     if (nd.largeurFixe.HasValue) n.LargeurFixe = nd.largeurFixe.Value;
                     if (!string.IsNullOrEmpty(nd.imageFichier))
                     {
@@ -292,6 +349,9 @@ namespace Mentalo.Persistance
                     if (ld.epaisseur > 0) l.Epaisseur = ld.epaisseur;
                     if (!string.IsNullOrEmpty(ld.trait)) l.Trait = ld.trait;
                     if (!string.IsNullOrEmpty(ld.fleche)) l.Fleche = ld.fleche;
+                    if (!string.IsNullOrEmpty(ld.trace)) l.Trace = ld.trace;
+                    if (ld.courbure.HasValue) l.Courbure = ld.courbure.Value;
+                    if (!string.IsNullOrEmpty(ld.etiquette)) l.Etiquette = ld.etiquette;
                     document.Liens.Add(l);
                 }
             }

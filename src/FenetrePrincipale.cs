@@ -69,15 +69,18 @@ namespace Mentalo
         private ToggleButton _ongletTexte, _ongletBoite, _ongletGroupe, _ongletLien;
         private string _ongletActif = "texte";
         private ComboBox _comboFond, _comboBordureCouleur, _comboBordureEpaisseur, _comboBordureTrait, _comboCoins;
+        private ComboBox _comboOmbre, _comboOpacite;
         private ComboBox _comboCouleurGroupe, _comboPositionTitre;
         private ComboBox _comboTraitGroupe, _comboEpaisseurGroupe, _comboCouleurTitre, _comboFondTitre, _comboTailleTitre;
         private TextBox _champTitreGroupe;
-        private ComboBox _comboCouleurLien, _comboEpaisseurLien, _comboTraitLien, _comboFlecheLien;
+        private ComboBox _comboCouleurLien, _comboEpaisseurLien, _comboTraitLien, _comboFlecheLien, _comboTraceLien;
+        private TextBox _champEtiquetteLien;
 
         // Panneaux flottants
         private Border _tust;
         private StackPanel _tustContenu;
         private MenuItem _menuTust, _menuMiniCarte, _menuInspecteur, _menuHistorique;
+        private MenuItem _menuRecents;
         private Border _miniCarte, _inspecteur, _panneauHistorique;
         private Grid _vignette;
         private Canvas _miniCanvas;
@@ -242,9 +245,25 @@ namespace Mentalo
             MenuItem fichier = new MenuItem { Header = "_Fichier" };
             fichier.Items.Add(Element("_Nouveau", ApplicationCommands.New, GesteDe("nouveau")));
             fichier.Items.Add(Element("_Ouvrir…", ApplicationCommands.Open, GesteDe("ouvrir")));
+            _menuRecents = new MenuItem { Header = "Ouvrir les fichiers _récents" };
+            RemplirMenuRecents();
+            fichier.Items.Add(_menuRecents);
             fichier.Items.Add(new Separator());
             fichier.Items.Add(Element("_Enregistrer", ApplicationCommands.Save, GesteDe("enregistrer")));
             fichier.Items.Add(Element("Enregistrer _sous…", ApplicationCommands.SaveAs, GesteDe("enregistrer-sous")));
+            fichier.Items.Add(new Separator());
+            MenuItem exporter = new MenuItem { Header = "E_xporter" };
+            AjouterActionMenu(exporter, "Image PNG…", delegate { ExporterImage(); });
+            AjouterActionMenu(exporter, "Dessin SVG…", delegate { ExporterSvg(); });
+            AjouterActionMenu(exporter, "Texte Markdown…", delegate { ExporterMarkdown(); });
+            fichier.Items.Add(exporter);
+            MenuItem importerPuces = new MenuItem
+            {
+                Header = "I_mporter un texte à puces…",
+                ToolTip = "Colle une liste à puces indentée : chaque ligne devient une boîte, l'indentation crée les liens"
+            };
+            importerPuces.Click += delegate { ImporterTexteAPuces(); };
+            fichier.Items.Add(importerPuces);
             fichier.Items.Add(new Separator());
             MenuItem preferences = new MenuItem { Header = "Préférences de _fichier…" };
             preferences.Click += delegate { OuvrirPreferencesFichier(); };
@@ -252,6 +271,14 @@ namespace Mentalo
             MenuItem parametres = new MenuItem { Header = "Paramè_tres…" };
             parametres.Click += delegate { OuvrirParametres(); };
             fichier.Items.Add(parametres);
+            fichier.Items.Add(new Separator());
+            MenuItem associer = new MenuItem
+            {
+                Header = "_Associer les fichiers .tea à Mental-o",
+                ToolTip = "Le double-clic sur un fichier .tea (ou .zeubi) dans l'Explorateur ouvrira Mental-o"
+            };
+            associer.Click += delegate { AssocierExtensions(); };
+            fichier.Items.Add(associer);
             fichier.Items.Add(new Separator());
             MenuItem quitter = new MenuItem { Header = "_Quitter", InputGestureText = "Alt+F4" };
             quitter.Click += delegate { Close(); };
@@ -328,7 +355,12 @@ namespace Mentalo
             aPropos.Click += delegate
             {
                 MessageBox.Show(this,
-                    "Mental-o — v0.11\n\nLogiciel de carte mentale, simple et léger.\n\n" +
+                    "Mental-o — v0.12\n\nLogiciel de carte mentale, simple et léger.\n\n" +
+                    "Fichiers .tea (l'ancien .zeubi s'ouvre toujours) · Fichier > Fichiers récents\n" +
+                    "Liens : tracé droit, courbe (poignée rose de courbure) ou équerre ; étiquette au milieu\n" +
+                    "Boîtes : ombre (aucune/légère/marquée) et opacité réglables (onglet Boîte ou clic droit)\n" +
+                    "Fichier > Exporter : PNG, SVG, Markdown · Importer un texte à puces → arbre de boîtes\n" +
+                    "Fichier > Associer les fichiers .tea : double-clic dans l'Explorateur\n\n" +
                     "Ctrl+C/V/D : copier, coller, dupliquer des boîtes (liens internes compris)\n" +
                     "Ctrl+F : rechercher · Flèches : naviguer de boîte en boîte · F2 : éditer\n" +
                     "Glisser : magnétisme et guides d'alignement (Alt pour ignorer)\n" +
@@ -336,7 +368,8 @@ namespace Mentalo
                     "Les cadres de groupes se lient comme des boîtes (poignées au survol)\n" +
                     "Barre de personnalisation à onglets (Texte / Boîte / Groupe / Lien) sous les modes\n" +
                     "Listes : boutons • – 1. de l'onglet Texte (auto-liste optionnelle dans Paramètres)\n" +
-                    "Fichier > Préférences de fichier : identité, fond du tableau, texte par défaut\n" +
+                    "Fichier > Préférences de fichier : identité, fond du tableau, texte et styles par défaut\n" +
+                    "  (onglets Boîtes / Liens / Groupes : le style des nouveaux éléments, enregistré dans le .tea)\n" +
                     "Fichier > Paramètres : raccourcis personnalisables, favoris ★, profils\n" +
                     "Fenêtres : Tust des raccourcis, mini-carte, inspecteur, historique\n" +
                     "Modes (barre du haut ou Ctrl+1/2/3) : automatique, déplacement seul, liens seuls\n" +
@@ -720,6 +753,32 @@ namespace Mentalo
             };
             panneau.Children.Add(AvecEtiquette("Coins", _comboCoins));
 
+            _comboOmbre = new ComboBox { Width = 84, Margin = new Thickness(4, 0, 0, 0), ToolTip = "Ombre portée de la boîte", VerticalAlignment = VerticalAlignment.Center };
+            _comboOmbre.Items.Add(new ComboBoxItem { Content = "Aucune", Tag = "aucune" });
+            _comboOmbre.Items.Add(new ComboBoxItem { Content = "Légère", Tag = "legere" });
+            _comboOmbre.Items.Add(new ComboBoxItem { Content = "Marquée", Tag = "marquee" });
+            _comboOmbre.SelectionChanged += delegate
+            {
+                if (_synchroEnCours) return;
+                ComboBoxItem choix = _comboOmbre.SelectedItem as ComboBoxItem;
+                if (choix != null) _toile.AppliquerStyleBoite("ombre", (string)choix.Tag);
+            };
+            panneau.Children.Add(AvecEtiquette("Ombre", _comboOmbre));
+
+            _comboOpacite = new ComboBox { Width = 66, Margin = new Thickness(4, 0, 0, 0), ToolTip = "Opacité de la boîte", VerticalAlignment = VerticalAlignment.Center };
+            _comboOpacite.Items.Add(new ComboBoxItem { Content = "100 %", Tag = 1.0 });
+            _comboOpacite.Items.Add(new ComboBoxItem { Content = "85 %", Tag = 0.85 });
+            _comboOpacite.Items.Add(new ComboBoxItem { Content = "70 %", Tag = 0.7 });
+            _comboOpacite.Items.Add(new ComboBoxItem { Content = "50 %", Tag = 0.5 });
+            _comboOpacite.Items.Add(new ComboBoxItem { Content = "30 %", Tag = 0.3 });
+            _comboOpacite.SelectionChanged += delegate
+            {
+                if (_synchroEnCours) return;
+                ComboBoxItem choix = _comboOpacite.SelectedItem as ComboBoxItem;
+                if (choix != null) _toile.AppliquerStyleBoite("opacite", (double)choix.Tag);
+            };
+            panneau.Children.Add(AvecEtiquette("Opacité", _comboOpacite));
+
             Button reajuster = new Button
             {
                 Content = Glyphe("E9A6", 14),
@@ -766,6 +825,17 @@ namespace Mentalo
                     break;
                 }
             SelectionnerParTag(_comboBordureTrait, etat.BordureTrait);
+            SelectionnerParTag(_comboOmbre, etat.Ombre);
+            _comboOpacite.SelectedIndex = -1;
+            foreach (object objet in _comboOpacite.Items)
+            {
+                ComboBoxItem element = (ComboBoxItem)objet;
+                if (element.Tag is double && Math.Abs((double)element.Tag - etat.Opacite) < 0.01)
+                {
+                    _comboOpacite.SelectedItem = element;
+                    break;
+                }
+            }
             _comboCoins.SelectedIndex = -1;
             foreach (object objet in _comboCoins.Items)
             {
@@ -982,6 +1052,36 @@ namespace Mentalo
             };
             panneau.Children.Add(AvecEtiquette("Flèches", _comboFlecheLien));
 
+            _comboTraceLien = new ComboBox { Width = 92, ToolTip = "Tracé du lien — la courbe se règle à la poignée rose", VerticalAlignment = VerticalAlignment.Center };
+            _comboTraceLien.Items.Add(new ComboBoxItem { Content = "Droit", Tag = "droit" });
+            _comboTraceLien.Items.Add(new ComboBoxItem { Content = "Courbe", Tag = "courbe" });
+            _comboTraceLien.Items.Add(new ComboBoxItem { Content = "Équerre", Tag = "equerre" });
+            _comboTraceLien.SelectionChanged += delegate
+            {
+                if (_synchroEnCours) return;
+                ComboBoxItem choix = _comboTraceLien.SelectedItem as ComboBoxItem;
+                if (choix != null) _toile.AppliquerTraceLienSelection((string)choix.Tag);
+            };
+            panneau.Children.Add(AvecEtiquette("Tracé", _comboTraceLien));
+
+            _champEtiquetteLien = new TextBox
+            {
+                Width = 150,
+                VerticalAlignment = VerticalAlignment.Center,
+                ToolTip = "Étiquette posée au milieu du trait (Entrée pour appliquer, vide pour retirer)"
+            };
+            _champEtiquetteLien.KeyDown += delegate(object expediteur, KeyEventArgs e)
+            {
+                if (e.Key != Key.Enter) return;
+                if (!_synchroEnCours) _toile.AppliquerEtiquetteLienSelection(_champEtiquetteLien.Text);
+                e.Handled = true;
+            };
+            _champEtiquetteLien.LostFocus += delegate
+            {
+                if (!_synchroEnCours) _toile.AppliquerEtiquetteLienSelection(_champEtiquetteLien.Text);
+            };
+            panneau.Children.Add(AvecEtiquette("Étiquette", _champEtiquetteLien));
+
             RemplirCombosCouleurs();
             return panneau;
         }
@@ -1002,6 +1102,8 @@ namespace Mentalo
                 }
             SelectionnerParTag(_comboTraitLien, lien.Trait);
             SelectionnerParTag(_comboFlecheLien, lien.Fleche);
+            SelectionnerParTag(_comboTraceLien, lien.Trace);
+            _champEtiquetteLien.Text = lien.Etiquette ?? "";
         }
 
         private void AppliquerTitreGroupeSaisi()
@@ -1656,8 +1758,9 @@ namespace Mentalo
             if (lien != null)
             {
                 _inspecteurTexte.Text = string.Format(
-                    "Lien\nCouleur : {0}\nÉpaisseur : {1} · Trait : {2}\nFlèche : {3}",
-                    lien.Couleur, lien.Epaisseur, lien.Trait, lien.Fleche);
+                    "Lien\nCouleur : {0}\nÉpaisseur : {1} · Trait : {2}\nFlèche : {3} · Tracé : {4}{5}",
+                    lien.Couleur, lien.Epaisseur, lien.Trait, lien.Fleche, lien.Trace,
+                    string.IsNullOrEmpty(lien.Etiquette) ? "" : "\nÉtiquette : « " + lien.Etiquette + " »");
             }
             else if (groupe != null)
             {
@@ -1803,6 +1906,83 @@ namespace Mentalo
             MettreAJourVignette();
         }
 
+        // ------------------------------------------------------------------ import / export
+
+        /// <summary>Le nom proposé pour un fichier exporté, calqué sur la carte ouverte.</summary>
+        private string NomExport()
+        {
+            if (!string.IsNullOrWhiteSpace(_toile.Document.NomAffichage)) return _toile.Document.NomAffichage;
+            if (_cheminFichier != null) return System.IO.Path.GetFileNameWithoutExtension(_cheminFichier);
+            return "ma carte";
+        }
+
+        private string DemanderCheminExport(string filtre, string extension)
+        {
+            SaveFileDialog dialogue = new SaveFileDialog();
+            dialogue.Filter = filtre;
+            dialogue.DefaultExt = extension;
+            dialogue.FileName = NomExport();
+            return dialogue.ShowDialog(this) == true ? dialogue.FileName : null;
+        }
+
+        private void ExporterImage()
+        {
+            string chemin = DemanderCheminExport("Image PNG (*.png)|*.png", ".png");
+            if (chemin == null) return;
+            string erreur;
+            if (!_toile.ExporterPng(chemin, out erreur))
+                MessageBox.Show(this, string.Format("Export impossible :\n{0}", erreur),
+                    "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+
+        private void ExporterSvg()
+        {
+            string chemin = DemanderCheminExport("Dessin SVG (*.svg)|*.svg", ".svg");
+            if (chemin == null) return;
+            try
+            {
+                Export.ExporterSvg(_toile, chemin);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, string.Format("Export impossible :\n{0}", ex.Message),
+                    "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private void ExporterMarkdown()
+        {
+            string chemin = DemanderCheminExport("Texte Markdown (*.md)|*.md", ".md");
+            if (chemin == null) return;
+            try
+            {
+                Export.ExporterMarkdown(_toile.Document, NomExport(), chemin);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, string.Format("Export impossible :\n{0}", ex.Message),
+                    "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private void ImporterTexteAPuces()
+        {
+            string texte = DialogueSaisie.DemanderTexteMultiligne(this, "Importer un texte à puces",
+                "Chaque ligne devient une boîte ; l'indentation (espaces ou tabulations)\n" +
+                "fait de la ligne l'enfant de la précédente, reliée par une flèche.");
+            if (texte == null) return;
+            List<Noeud> noeuds;
+            List<Lien> liens;
+            Export.ImporterTexteAPuces(texte, _toile.CentreCanvas(), out noeuds, out liens);
+            if (noeuds.Count == 0)
+            {
+                MessageBox.Show(this, "Aucune ligne exploitable dans ce texte.",
+                    "Mental-o", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            _toile.ImporterArbre(noeuds, liens);
+        }
+
         private void ChoisirImage()
         {
             OpenFileDialog dialogue = new OpenFileDialog();
@@ -1824,7 +2004,7 @@ namespace Mentalo
         {
             if (!ConfirmerAbandon()) return;
             OpenFileDialog dialogue = new OpenFileDialog();
-            dialogue.Filter = Fichier.Filtre;
+            dialogue.Filter = Fichier.FiltreOuverture;
             dialogue.DefaultExt = Fichier.Extension;
             if (dialogue.ShowDialog(this) == true)
                 OuvrirFichier(dialogue.FileName);
@@ -1839,11 +2019,107 @@ namespace Mentalo
                 _cheminFichier = chemin;
                 _modifie = false;
                 MettreAJourTitre();
+                RetenirFichierRecent(chemin);
             }
             catch (Exception ex)
             {
                 MessageBox.Show(this,
                     string.Format("Impossible d'ouvrir le fichier :\n{0}", ex.Message),
+                    "Mental-o", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void RetenirFichierRecent(string chemin)
+        {
+            ParametresGlobaux.AjouterFichierRecent(chemin);
+            ParametresGlobaux.Enregistrer();
+            RemplirMenuRecents();
+        }
+
+        private void RemplirMenuRecents()
+        {
+            if (_menuRecents == null) return;
+            _menuRecents.Items.Clear();
+            List<string> recents = ParametresGlobaux.FichiersRecents;
+            if (recents.Count == 0)
+            {
+                _menuRecents.Items.Add(new MenuItem { Header = "(aucun fichier récent)", IsEnabled = false });
+                return;
+            }
+            int numero = 1;
+            foreach (string chemin in recents)
+            {
+                MenuItem element = new MenuItem
+                {
+                    Header = string.Format("_{0}  {1}", numero++, System.IO.Path.GetFileName(chemin)),
+                    ToolTip = chemin
+                };
+                string capture = chemin;
+                element.Click += delegate { OuvrirFichierRecent(capture); };
+                _menuRecents.Items.Add(element);
+            }
+            _menuRecents.Items.Add(new Separator());
+            MenuItem vider = new MenuItem { Header = "_Vider la liste" };
+            vider.Click += delegate
+            {
+                ParametresGlobaux.FichiersRecents.Clear();
+                ParametresGlobaux.Enregistrer();
+                RemplirMenuRecents();
+            };
+            _menuRecents.Items.Add(vider);
+        }
+
+        private void OuvrirFichierRecent(string chemin)
+        {
+            if (!File.Exists(chemin))
+            {
+                MessageBox.Show(this,
+                    string.Format("« {0} » n'existe plus : il est retiré de la liste.", chemin),
+                    "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
+                ParametresGlobaux.FichiersRecents.RemoveAll(delegate(string existant)
+                {
+                    return string.Equals(existant, chemin, StringComparison.OrdinalIgnoreCase);
+                });
+                ParametresGlobaux.Enregistrer();
+                RemplirMenuRecents();
+                return;
+            }
+            if (!ConfirmerAbandon()) return;
+            OuvrirFichier(chemin);
+        }
+
+        /// <summary>Enregistre l'association .tea/.zeubi → Mental-o pour l'utilisateur courant
+        /// (HKCU, aucun droit administrateur) — l'équivalent d'outils\associer-tea.bat.</summary>
+        private void AssocierExtensions()
+        {
+            try
+            {
+                string exe = System.Reflection.Assembly.GetExecutingAssembly().Location;
+                string icone = System.IO.Path.Combine(
+                    AppDomain.CurrentDomain.BaseDirectory, "ressources", "fichier-tea.ico");
+                using (RegistryKey classes = Registry.CurrentUser.CreateSubKey(@"Software\Classes"))
+                {
+                    using (RegistryKey cle = classes.CreateSubKey(".tea"))
+                        cle.SetValue(null, "Mentalo.Carte");
+                    using (RegistryKey cle = classes.CreateSubKey(".zeubi"))
+                        cle.SetValue(null, "Mentalo.Carte");
+                    using (RegistryKey cle = classes.CreateSubKey("Mentalo.Carte"))
+                        cle.SetValue(null, "Carte Mental-o");
+                    if (File.Exists(icone))
+                        using (RegistryKey cle = classes.CreateSubKey(@"Mentalo.Carte\DefaultIcon"))
+                            cle.SetValue(null, icone);
+                    using (RegistryKey cle = classes.CreateSubKey(@"Mentalo.Carte\shell\open\command"))
+                        cle.SetValue(null, "\"" + exe + "\" \"%1\"");
+                }
+                MessageBox.Show(this,
+                    "C'est fait : le double-clic sur un fichier .tea (ou .zeubi) ouvrira Mental-o.\n" +
+                    "Si l'Explorateur affiche encore l'ancienne icône, elle se rafraîchira à la prochaine session.",
+                    "Mental-o", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this,
+                    string.Format("Impossible d'enregistrer l'association :\n{0}", ex.Message),
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -1857,7 +2133,7 @@ namespace Mentalo
         private bool EnregistrerSous()
         {
             SaveFileDialog dialogue = new SaveFileDialog();
-            dialogue.Filter = Fichier.Filtre;
+            dialogue.Filter = Fichier.FiltreEnregistrement;
             dialogue.DefaultExt = Fichier.Extension;
             dialogue.FileName = _cheminFichier == null ? "ma carte" : System.IO.Path.GetFileNameWithoutExtension(_cheminFichier);
             if (dialogue.ShowDialog(this) != true) return false;
@@ -1872,6 +2148,7 @@ namespace Mentalo
                 _cheminFichier = chemin;
                 _modifie = false;
                 MettreAJourTitre();
+                RetenirFichierRecent(chemin);
                 return true;
             }
             catch (Exception ex)

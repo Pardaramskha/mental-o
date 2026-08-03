@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -7,7 +7,7 @@ using System.IO;
 
 namespace Mentalo.Outils
 {
-    /// <summary>Génère ressources\mentalo.ico (application) et ressources\fichier-zeubi.ico
+    /// <summary>Génère ressources\mentalo.ico (application) et ressources\fichier-tea.ico
     /// (type de fichier), en dessinant un motif de carte mentale à plusieurs tailles.
     /// À lancer depuis la racine du projet (voir generer-icones.bat).</summary>
     public static class GenerateurIcones
@@ -32,9 +32,9 @@ namespace Mentalo.Outils
                 EcrireIco(Path.Combine("ressources", "mentalo.ico"), tailles, DessinerIconeApplication);
 
             if (File.Exists(sourceFichier))
-                EcrireIcoDepuisPng(sourceFichier, Path.Combine("ressources", "fichier-zeubi.ico"), tailles);
+                EcrireIcoDepuisPng(sourceFichier, Path.Combine("ressources", "fichier-tea.ico"), tailles);
             else
-                EcrireIco(Path.Combine("ressources", "fichier-zeubi.ico"), tailles, DessinerIconeFichier);
+                EcrireIco(Path.Combine("ressources", "fichier-tea.ico"), tailles, DessinerIconeFichier);
 
             Console.WriteLine("Icones generees dans ressources\\");
         }

@@ -35,6 +35,7 @@ namespace Mentalo.Parametres
         public bool? vignette { get; set; }    // nullable : absent = activée
         public bool? magnetisme { get; set; }  // idem
         public List<string> stylesFavoris { get; set; }
+        public List<string> fichiersRecents { get; set; }
     }
 
     /// <summary>Paramètres de l'application, communs à toutes les cartes
@@ -85,6 +86,20 @@ namespace Mentalo.Parametres
         public static bool VignetteTableau = true; // légère ombre sur les bords du tableau
         public static bool Magnetisme = true;      // aimant + guides pendant le glisser (Alt pour ignorer)
         public static List<string> StylesFavoris = new List<string>(); // StyleBoite.Serialiser()
+        public static List<string> FichiersRecents = new List<string>(); // 5 derniers .tea ouverts/enregistrés
+
+        /// <summary>Pose un chemin en tête des fichiers récents (5 au plus, sans doublon).</summary>
+        public static void AjouterFichierRecent(string chemin)
+        {
+            if (string.IsNullOrEmpty(chemin)) return;
+            FichiersRecents.RemoveAll(delegate(string existant)
+            {
+                return string.Equals(existant, chemin, StringComparison.OrdinalIgnoreCase);
+            });
+            FichiersRecents.Insert(0, chemin);
+            while (FichiersRecents.Count > 5)
+                FichiersRecents.RemoveAt(FichiersRecents.Count - 1);
+        }
 
         public static double FacteurPoignees()
         {
@@ -142,6 +157,7 @@ namespace Mentalo.Parametres
                 if (dto.vignette.HasValue) VignetteTableau = dto.vignette.Value;
                 if (dto.magnetisme.HasValue) Magnetisme = dto.magnetisme.Value;
                 if (dto.stylesFavoris != null) StylesFavoris = dto.stylesFavoris;
+                if (dto.fichiersRecents != null) FichiersRecents = dto.fichiersRecents;
             }
             catch { }
         }
@@ -164,6 +180,7 @@ namespace Mentalo.Parametres
                 dto.vignette = VignetteTableau;
                 dto.magnetisme = Magnetisme;
                 dto.stylesFavoris = StylesFavoris;
+                dto.fichiersRecents = FichiersRecents;
                 File.WriteAllText(Chemin(), new JavaScriptSerializer().Serialize(dto));
             }
             catch { }

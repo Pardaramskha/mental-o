@@ -8,6 +8,8 @@ namespace Mentalo.Modele
         public double BordureEpaisseur;
         public string BordureTrait;   // "plein" | "tirets" | "points" | "aucune"
         public double Rayon;
+        public string Ombre;          // "aucune" | "legere" | "marquee"
+        public double Opacite;        // 0,3 à 1
 
         public static StyleBoite Depuis(Noeud noeud)
         {
@@ -17,6 +19,8 @@ namespace Mentalo.Modele
             style.BordureEpaisseur = noeud.BordureEpaisseur;
             style.BordureTrait = noeud.BordureTrait;
             style.Rayon = noeud.Rayon;
+            style.Ombre = noeud.Ombre;
+            style.Opacite = noeud.Opacite;
             return style;
         }
 
@@ -27,6 +31,8 @@ namespace Mentalo.Modele
             noeud.BordureEpaisseur = BordureEpaisseur;
             noeud.BordureTrait = BordureTrait;
             noeud.Rayon = Rayon;
+            noeud.Ombre = string.IsNullOrEmpty(Ombre) ? "legere" : Ombre;
+            noeud.Opacite = Opacite > 0 ? Opacite : 1;
         }
 
         public bool EgalA(Noeud noeud)
@@ -35,7 +41,9 @@ namespace Mentalo.Modele
                 && BordureCouleur == noeud.BordureCouleur
                 && BordureEpaisseur == noeud.BordureEpaisseur
                 && BordureTrait == noeud.BordureTrait
-                && Rayon == noeud.Rayon;
+                && Rayon == noeud.Rayon
+                && (string.IsNullOrEmpty(Ombre) ? "legere" : Ombre) == noeud.Ombre
+                && (Opacite > 0 ? Opacite : 1) == noeud.Opacite;
         }
 
         /// <summary>Forme compacte pour les styles favoris (parametres.json).</summary>
@@ -44,14 +52,17 @@ namespace Mentalo.Modele
             return Fond + "|" + BordureCouleur + "|"
                 + BordureEpaisseur.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|"
                 + BordureTrait + "|"
-                + Rayon.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                + Rayon.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|"
+                + (string.IsNullOrEmpty(Ombre) ? "legere" : Ombre) + "|"
+                + (Opacite > 0 ? Opacite : 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
         public static StyleBoite Deserialiser(string texte)
         {
             if (string.IsNullOrEmpty(texte)) return null;
             string[] parties = texte.Split('|');
-            if (parties.Length != 5) return null;
+            // 5 parties : favoris enregistrés avant l'arrivée des ombres et de l'opacité.
+            if (parties.Length != 5 && parties.Length != 7) return null;
             StyleBoite style = new StyleBoite();
             style.Fond = parties[0];
             style.BordureCouleur = parties[1];
@@ -63,6 +74,16 @@ namespace Mentalo.Modele
                 System.Globalization.CultureInfo.InvariantCulture, out rayon)) return null;
             style.BordureEpaisseur = epaisseur;
             style.Rayon = rayon;
+            style.Ombre = "legere";
+            style.Opacite = 1;
+            if (parties.Length == 7)
+            {
+                style.Ombre = parties[5];
+                double opacite;
+                if (double.TryParse(parties[6], System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out opacite) && opacite > 0)
+                    style.Opacite = opacite;
+            }
             return style;
         }
 
@@ -74,6 +95,8 @@ namespace Mentalo.Modele
             copie.BordureEpaisseur = BordureEpaisseur;
             copie.BordureTrait = BordureTrait;
             copie.Rayon = Rayon;
+            copie.Ombre = Ombre;
+            copie.Opacite = Opacite;
             return copie;
         }
     }
