@@ -1526,6 +1526,15 @@ namespace Mentalo.Vue
             }
 
             menu.Items.Add(new Separator());
+            MenuItem inserer = new MenuItem
+            {
+                Header = "Insérer une boîte au milieu",
+                ToolTip = "Coupe le lien en deux tronçons reliés par une boîte neuve (Échap annule)"
+            };
+            inserer.Click += delegate { InsererBoiteSurLien(lien); };
+            menu.Items.Add(inserer);
+
+            menu.Items.Add(new Separator());
             MenuItem supprimer = new MenuItem { Header = "Supprimer le lien", InputGestureText = "Suppr" };
             supprimer.Click += delegate
             {
@@ -1594,6 +1603,50 @@ namespace Mentalo.Vue
                 ? (Math.Abs(lien.Courbure) > 0.5 ? lien.Courbure : 46)
                 : lien.Courbure;
             Historique.ExecuterEtPousser(new CommandeModifierTraceLien(this, lien, trace, courbure));
+        }
+
+        /// <summary>Insère une boîte neuve au milieu d'un lien : le lien d'origine devient
+        /// deux tronçons de même style, et l'édition démarre aussitôt. Échap annule tout.</summary>
+        public void InsererBoiteSurLien(Lien lien)
+        {
+            if (_mode == "lecture") return;
+            Point a, b;
+            if (!PointsLien(lien, out a, out b)) return;
+            Point milieu = LienVisuel.PointMilieu(a, b, lien);
+
+            Noeud noeud = new Noeud();
+            if (Document.BoiteParDefaut != null) Document.BoiteParDefaut.AppliquerA(noeud);
+            noeud.X = milieu.X - 55;
+            noeud.Y = milieu.Y - 16;
+
+            Lien premier = ClonerLien(lien);
+            premier.SourceId = lien.SourceId;
+            premier.CibleId = noeud.Id;
+            premier.Courbure = lien.Courbure / 2;
+            Lien second = ClonerLien(lien);
+            second.SourceId = noeud.Id;
+            second.CibleId = lien.CibleId;
+            second.Courbure = lien.Courbure / 2;
+            second.Etiquette = ""; // l'étiquette reste sur le premier tronçon
+            if (lien.Fleche == "simple") premier.Fleche = "aucune"; // la flèche file vers la cible
+
+            List<ICommande> commandes = new List<ICommande>();
+            commandes.Add(new CommandeSupprimerLien(this, lien));
+            commandes.Add(new CommandeCreerNoeud(this, noeud));
+            commandes.Add(new CommandeCreerLien(this, premier));
+            commandes.Add(new CommandeCreerLien(this, second));
+            Historique.ExecuterEtPousser(new CommandeComposite(commandes));
+            // Marquée « fraîche » : rester vide (Échap ou validation à blanc) annule
+            // toute l'insertion et restaure le lien d'origine.
+            _noeudFraichementCree = noeud;
+
+            NoeudVisuel visuel;
+            if (_visuels.TryGetValue(noeud, out visuel))
+            {
+                Selectionner(visuel);
+                visuel.CommencerEdition();
+                SignalerFormatCible();
+            }
         }
 
         public void DemanderEtiquetteLien(Lien lien)
@@ -1980,6 +2033,47 @@ namespace Mentalo.Vue
                     deplacements.Add(d);
                 }
                 position += (horizontal ? r.Width : r.Height) + espace;
+            }
+            if (deplacements.Count == 0) return;
+            CommandeDeplacerNoeuds commande = new CommandeDeplacerNoeuds(this, deplacements);
+            commande.Executer();
+            Historique.Pousser(commande);
+        }
+
+        /// <summary>Range la sélection en colonne (l'esprit des « stacks » de Scapple) :
+        /// centres alignés, boîtes empilées de haut en bas à espacement régulier.</summary>
+        public void EmpilerSelection()
+        {
+            if (_mode == "lecture" || _selectionnes.Count < 2) return;
+            const double espace = 14;
+            List<NoeudVisuel> tries = new List<NoeudVisuel>(_selectionnes);
+            tries.Sort(delegate(NoeudVisuel premier, NoeudVisuel second)
+            {
+                Rect ra = RectangleNoeud(premier.Modele), rb = RectangleNoeud(second.Modele);
+                return ra.Y != rb.Y ? ra.Y.CompareTo(rb.Y) : ra.X.CompareTo(rb.X);
+            });
+            double centreX = 0;
+            foreach (NoeudVisuel v in tries)
+            {
+                Rect r = RectangleNoeud(v.Modele);
+                centreX += r.X + r.Width / 2;
+            }
+            centreX /= tries.Count;
+            double y = RectangleNoeud(tries[0].Modele).Y;
+            List<CommandeDeplacerNoeuds.Deplacement> deplacements = new List<CommandeDeplacerNoeuds.Deplacement>();
+            foreach (NoeudVisuel v in tries)
+            {
+                Rect r = RectangleNoeud(v.Modele);
+                double nx = centreX - r.Width / 2;
+                if (nx != r.X || y != r.Y)
+                {
+                    CommandeDeplacerNoeuds.Deplacement d = new CommandeDeplacerNoeuds.Deplacement();
+                    d.Noeud = v.Modele;
+                    d.AncienX = r.X; d.AncienY = r.Y;
+                    d.NouveauX = nx; d.NouveauY = y;
+                    deplacements.Add(d);
+                }
+                y += r.Height + espace;
             }
             if (deplacements.Count == 0) return;
             CommandeDeplacerNoeuds commande = new CommandeDeplacerNoeuds(this, deplacements);
@@ -2455,16 +2549,17 @@ namespace Mentalo.Vue
             return bornes;
         }
 
-        /// <summary>Rend la carte en PNG (échelle 2×, fond du tableau compris).
-        /// Renvoie faux avec un message si la carte est vide ou si l'écriture échoue.</summary>
-        public bool ExporterPng(string chemin, out string erreur)
+        /// <summary>Rend la carte en image (échelle 2×, fond du tableau compris) — le socle
+        /// commun des exports PNG et PDF et de l'impression. Renvoie null si la carte est
+        /// vide ou si le rendu échoue.</summary>
+        public BitmapSource RendreCarte(out string erreur)
         {
             erreur = null;
             Rect bornes = BornesContenu();
             if (bornes == Rect.Empty)
             {
                 erreur = "La carte est vide : rien à exporter.";
-                return false;
+                return null;
             }
             bornes.Inflate(30, 30);
 
@@ -2498,16 +2593,13 @@ namespace Mentalo.Vue
                 }
                 RenderTargetBitmap rendu = new RenderTargetBitmap(largeur, hauteur, 96, 96, PixelFormats.Pbgra32);
                 rendu.Render(dessin);
-                PngBitmapEncoder encodeur = new PngBitmapEncoder();
-                encodeur.Frames.Add(BitmapFrame.Create(rendu));
-                using (FileStream flux = new FileStream(chemin, FileMode.Create))
-                    encodeur.Save(flux);
-                return true;
+                rendu.Freeze();
+                return rendu;
             }
             catch (Exception ex)
             {
                 erreur = ex.Message;
-                return false;
+                return null;
             }
             finally
             {
@@ -2518,6 +2610,26 @@ namespace Mentalo.Vue
                 foreach (NoeudVisuel v in _selectionnes) v.DefinirSelection(true);
                 if (_selectionLien != null) _selectionLien.DefinirSelection(true);
                 SignalerVue();
+            }
+        }
+
+        /// <summary>Rend la carte en PNG. Renvoie faux avec un message en cas d'échec.</summary>
+        public bool ExporterPng(string chemin, out string erreur)
+        {
+            BitmapSource rendu = RendreCarte(out erreur);
+            if (rendu == null) return false;
+            try
+            {
+                PngBitmapEncoder encodeur = new PngBitmapEncoder();
+                encodeur.Frames.Add(BitmapFrame.Create(rendu));
+                using (FileStream flux = new FileStream(chemin, FileMode.Create))
+                    encodeur.Save(flux);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                erreur = ex.Message;
+                return false;
             }
         }
 
@@ -3542,6 +3654,13 @@ namespace Mentalo.Vue
                         aligner.Items.Add(distribuerV);
                     }
                     menu.Items.Add(aligner);
+                    MenuItem empiler = new MenuItem
+                    {
+                        Header = "Empiler la sélection",
+                        ToolTip = "Range les boîtes en colonne, centres alignés"
+                    };
+                    empiler.Click += delegate { EmpilerSelection(); };
+                    menu.Items.Add(empiler);
                 }
 
                 menu.Items.Add(new Separator());

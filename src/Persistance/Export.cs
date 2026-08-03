@@ -297,14 +297,22 @@ namespace Mentalo.Persistance
                 TexteRiche.CouleurDepuis(repli, System.Windows.Media.Colors.Gray)));
         }
 
-        // ------------------------------------------------------------------ Markdown
+        // ------------------------------------------------------------------ arborescence (Markdown et OPML)
 
-        public static void ExporterMarkdown(DocumentCarte document, string nomParDefaut, string chemin)
+        private class Branche
+        {
+            public Noeud Noeud;
+            public Lien LienArrivee; // le lien parcouru pour arriver là (porteur d'étiquette)
+            public List<Branche> Enfants = new List<Branche>();
+        }
+
+        /// <summary>La carte vue comme une forêt : descente le long des liens, les flèches
+        /// simples orientent, chaque boîte n'apparaît qu'une fois.</summary>
+        private static List<Branche> ConstruireForet(DocumentCarte document)
         {
             Dictionary<string, Noeud> parId = new Dictionary<string, Noeud>();
             foreach (Noeud n in document.Noeuds) parId[n.Id] = n;
 
-            // Voisins de chaque boîte ; une flèche simple oriente la descente de l'arbre.
             Dictionary<string, List<Lien>> voisins = new Dictionary<string, List<Lien>>();
             Dictionary<string, int> entrants = new Dictionary<string, int>();
             foreach (Noeud n in document.Noeuds)
@@ -320,18 +328,50 @@ namespace Mentalo.Persistance
                 if (lien.Fleche == "simple") entrants[lien.CibleId]++;
             }
 
+            List<Branche> foret = new List<Branche>();
+            HashSet<string> visites = new HashSet<string>();
+            foreach (Noeud racine in ChoisirRacines(document, voisins, entrants))
+            {
+                if (visites.Contains(racine.Id)) continue;
+                foret.Add(ConstruireBranche(racine, null, parId, voisins, visites));
+            }
+            return foret;
+        }
+
+        private static Branche ConstruireBranche(Noeud noeud, Lien lienArrivee,
+            Dictionary<string, Noeud> parId, Dictionary<string, List<Lien>> voisins, HashSet<string> visites)
+        {
+            visites.Add(noeud.Id);
+            Branche branche = new Branche { Noeud = noeud, LienArrivee = lienArrivee };
+            foreach (Lien lien in voisins[noeud.Id])
+            {
+                // Une flèche simple ne se descend que dans son sens.
+                if (lien.Fleche == "simple" && lien.CibleId == noeud.Id) continue;
+                string autreId = lien.SourceId == noeud.Id ? lien.CibleId : lien.SourceId;
+                Noeud autre;
+                if (!parId.TryGetValue(autreId, out autre) || visites.Contains(autreId)) continue;
+                branche.Enfants.Add(ConstruireBranche(autre, lien, parId, voisins, visites));
+            }
+            return branche;
+        }
+
+        // ------------------------------------------------------------------ Markdown
+
+        public static void ExporterMarkdown(DocumentCarte document, string nomParDefaut, string chemin)
+        {
+            Dictionary<string, Noeud> parId = new Dictionary<string, Noeud>();
+            foreach (Noeud n in document.Noeuds) parId[n.Id] = n;
+
             StringBuilder markdown = new StringBuilder();
             string titre = !string.IsNullOrWhiteSpace(document.NomAffichage) ? document.NomAffichage : nomParDefaut;
             markdown.AppendLine("# " + titre);
             if (!string.IsNullOrWhiteSpace(document.Auteur))
                 markdown.AppendLine().AppendLine("*" + document.Auteur + "*");
 
-            HashSet<string> visites = new HashSet<string>();
-            foreach (Noeud racine in ChoisirRacines(document, voisins, entrants))
+            foreach (Branche branche in ConstruireForet(document))
             {
-                if (visites.Contains(racine.Id)) continue;
                 markdown.AppendLine();
-                EcrireBrancheMarkdown(markdown, racine, null, 0, parId, voisins, visites);
+                EcrireBrancheMarkdown(markdown, branche, 0);
             }
 
             bool premierGroupe = true;
@@ -374,22 +414,95 @@ namespace Mentalo.Persistance
             return racines;
         }
 
-        private static void EcrireBrancheMarkdown(StringBuilder markdown, Noeud noeud, Lien lienArrivee,
-            int profondeur, Dictionary<string, Noeud> parId,
-            Dictionary<string, List<Lien>> voisins, HashSet<string> visites)
+        private static void EcrireBrancheMarkdown(StringBuilder markdown, Branche branche, int profondeur)
         {
-            visites.Add(noeud.Id);
-            string etiquette = lienArrivee != null && !string.IsNullOrEmpty(lienArrivee.Etiquette)
-                ? " *(" + lienArrivee.Etiquette + ")*" : "";
-            markdown.AppendLine(new string(' ', profondeur * 2) + "- " + TexteEnLigne(noeud) + etiquette);
-            foreach (Lien lien in voisins[noeud.Id])
+            string etiquette = branche.LienArrivee != null && !string.IsNullOrEmpty(branche.LienArrivee.Etiquette)
+                ? " *(" + branche.LienArrivee.Etiquette + ")*" : "";
+            markdown.AppendLine(new string(' ', profondeur * 2) + "- " + TexteEnLigne(branche.Noeud) + etiquette);
+            foreach (Branche enfant in branche.Enfants)
+                EcrireBrancheMarkdown(markdown, enfant, profondeur + 1);
+        }
+
+        // ------------------------------------------------------------------ OPML
+
+        /// <summary>Exporte l'arborescence au format OPML 2.0 (échange standard entre
+        /// logiciels de plan et de mind-map).</summary>
+        public static void ExporterOpml(DocumentCarte document, string nomParDefaut, string chemin)
+        {
+            System.Xml.XmlWriterSettings reglages = new System.Xml.XmlWriterSettings();
+            reglages.Indent = true;
+            reglages.Encoding = Encoding.UTF8;
+            using (System.Xml.XmlWriter xml = System.Xml.XmlWriter.Create(chemin, reglages))
             {
-                // Une flèche simple ne se descend que dans son sens.
-                if (lien.Fleche == "simple" && lien.CibleId == noeud.Id) continue;
-                string autreId = lien.SourceId == noeud.Id ? lien.CibleId : lien.SourceId;
-                Noeud autre;
-                if (!parId.TryGetValue(autreId, out autre) || visites.Contains(autreId)) continue;
-                EcrireBrancheMarkdown(markdown, autre, lien, profondeur + 1, parId, voisins, visites);
+                xml.WriteStartDocument();
+                xml.WriteStartElement("opml");
+                xml.WriteAttributeString("version", "2.0");
+                xml.WriteStartElement("head");
+                xml.WriteElementString("title",
+                    !string.IsNullOrWhiteSpace(document.NomAffichage) ? document.NomAffichage : nomParDefaut);
+                if (!string.IsNullOrWhiteSpace(document.Auteur))
+                    xml.WriteElementString("ownerName", document.Auteur);
+                xml.WriteEndElement();
+                xml.WriteStartElement("body");
+                foreach (Branche branche in ConstruireForet(document))
+                    EcrireBrancheOpml(xml, branche);
+                xml.WriteEndElement();
+                xml.WriteEndElement();
+                xml.WriteEndDocument();
+            }
+        }
+
+        private static void EcrireBrancheOpml(System.Xml.XmlWriter xml, Branche branche)
+        {
+            xml.WriteStartElement("outline");
+            string texte = TexteEnLigne(branche.Noeud);
+            if (branche.LienArrivee != null && !string.IsNullOrEmpty(branche.LienArrivee.Etiquette))
+                texte += " (" + branche.LienArrivee.Etiquette + ")";
+            xml.WriteAttributeString("text", texte);
+            foreach (Branche enfant in branche.Enfants)
+                EcrireBrancheOpml(xml, enfant);
+            xml.WriteEndElement();
+        }
+
+        /// <summary>Importe un plan OPML : chaque « outline » devient une boîte, la
+        /// hiérarchie devient des liens fléchés (ce que Scapple ne sait pas faire 😏).</summary>
+        public static void ImporterOpml(string chemin, Point centre,
+            out List<Noeud> noeuds, out List<Lien> liens)
+        {
+            noeuds = new List<Noeud>();
+            liens = new List<Lien>();
+            System.Xml.XmlDocument xml = new System.Xml.XmlDocument();
+            xml.Load(chemin);
+            System.Xml.XmlNode corps = xml.SelectSingleNode("/opml/body");
+            if (corps == null) corps = xml.SelectSingleNode("//body");
+            if (corps == null) throw new InvalidDataException("Aucune section <body> : ce n'est pas un fichier OPML valide.");
+            List<KeyValuePair<int, string>> lignes = new List<KeyValuePair<int, string>>();
+            CollecterOutlines(corps, 0, lignes);
+            if (lignes.Count == 0) return;
+            ConstruireArbreDepuisNiveaux(lignes, centre, noeuds, liens);
+        }
+
+        private static void CollecterOutlines(System.Xml.XmlNode parent, int profondeur,
+            List<KeyValuePair<int, string>> lignes)
+        {
+            foreach (System.Xml.XmlNode enfant in parent.ChildNodes)
+            {
+                if (enfant.Name != "outline") continue;
+                string texte = null;
+                if (enfant.Attributes != null)
+                {
+                    System.Xml.XmlAttribute attribut = enfant.Attributes["text"];
+                    if (attribut == null) attribut = enfant.Attributes["title"];
+                    if (attribut != null) texte = attribut.Value;
+                }
+                if (string.IsNullOrWhiteSpace(texte))
+                {
+                    // Un outline vide ne crée pas de boîte, mais ses enfants restent lisibles.
+                    CollecterOutlines(enfant, profondeur, lignes);
+                    continue;
+                }
+                lignes.Add(new KeyValuePair<int, string>(profondeur, texte.Trim()));
+                CollecterOutlines(enfant, profondeur + 1, lignes);
             }
         }
 
@@ -434,13 +547,23 @@ namespace Mentalo.Persistance
             int niveau = 0;
             foreach (int largeur in largeurs)
                 niveauParLargeur[largeur] = niveau++;
+            List<KeyValuePair<int, string>> normalisees = new List<KeyValuePair<int, string>>();
+            foreach (KeyValuePair<int, string> ligne in lignes)
+                normalisees.Add(new KeyValuePair<int, string>(niveauParLargeur[ligne.Key], ligne.Value));
+            ConstruireArbreDepuisNiveaux(normalisees, centre, noeuds, liens);
+        }
 
+        /// <summary>Le cœur commun des imports (texte à puces, OPML) : des lignes à niveaux
+        /// explicites vers des boîtes reliées parent → enfant, centrées autour du point donné.</summary>
+        private static void ConstruireArbreDepuisNiveaux(List<KeyValuePair<int, string>> lignes,
+            Point centre, List<Noeud> noeuds, List<Lien> liens)
+        {
             List<Noeud> pile = new List<Noeud>(); // pile[n] = dernière boîte du niveau n
             int rang = 0;
             foreach (KeyValuePair<int, string> ligne in lignes)
             {
-                int profondeur = niveauParLargeur[ligne.Key];
-                if (profondeur > pile.Count) profondeur = pile.Count; // saut d'indentation abrupt
+                int profondeur = ligne.Key;
+                if (profondeur > pile.Count) profondeur = pile.Count; // saut de niveau abrupt
 
                 Noeud noeud = new Noeud();
                 noeud.DefinirTexteSimple(ligne.Value);

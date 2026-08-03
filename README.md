@@ -60,8 +60,9 @@ Ne demande que le .NET Framework 4.8, inclus dans Windows 10/11 — aucune dépe
 | Recentrer la carte | Ctrl+R |
 
 Les cartes sont enregistrées au format `.tea` (archive ZIP contenant un `document.json`).
-L'ancienne extension `.zeubi` s'ouvre toujours. Fichier > Exporter propose PNG, SVG et
-Markdown ; Fichier > Importer un texte à puces transforme une liste indentée en arbre de boîtes.
+L'ancienne extension `.zeubi` s'ouvre toujours. Fichier > Exporter propose PNG, PDF, SVG,
+Markdown et OPML (l'impression est dans Fichier > Imprimer) ; l'import accepte un texte à
+puces indenté ou un plan OPML, transformés en arbre de boîtes liées.
 
 ## Outils
 

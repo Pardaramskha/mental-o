@@ -180,7 +180,94 @@ Vivier d'idées à trier ensemble — rien n'est engagé, tout est discutable.
 - **Mode chaîne** : chaque nouvelle boîte se lie automatiquement à la précédente (prise de notes rapide).
 - **Mode verrouillé** : tout figé, juste la consultation et le pan/zoom.
 
-## 7. Journal
+## 7. Comparatif avec Scapple (03/08/2026)
+
+> Sources : site et fiche App Store de Literature & Latte (liste officielle des fonctions,
+> historique des versions) + revues détaillées. Versions de référence : Scapple 1.5.4 (macOS)
+> / 1.4.2 (Windows) — un logiciel volontairement minimaliste, quasi figé depuis des années.
+
+### Cœur du canevas
+
+| Fonction | Scapple | Mental-o | Verdict |
+|---|---|---|---|
+| Double-clic sur le vide → note | ✔ | ✔ | Égalité |
+| Placement 100 % libre, canevas « infini » | ✔ | ✔ | Égalité |
+| Création de lien | glisser une note **sur** une autre | poignées sur les bords (choix v0.2) | Gestes différents, même service |
+| Flèches simples / doubles | ✔ | ✔ | Égalité |
+| Trait plein / tirets / pointillé | ✔ (pointillé par défaut) | ✔ | Égalité |
+| **Étiquettes sur les liens** | ✔ | ✔ (v0.12) | Égalité |
+| Liens **courbes** et en **équerre** | ✘ (droites uniquement, regret connu des utilisateurs) | ✔ + poignée de courbure | **Mental-o devant** |
+| Insérer une note **au milieu d'un lien existant** | ✔ | ✔ (v0.13, clic droit sur le lien) | Égalité |
+| Piles de notes (« stacks » : colonnes auto-alignées) | ✔ | ✔ « Empiler la sélection » (v0.13) | Égalité |
+| Formes d'arrière-plan / notes aimantées | ✔ (formes libres, les notes posées dessus suivent) | ✔ via les groupes (cadre stylable, déplacement en bloc, titres) | Égalité, philosophies différentes |
+| Liens depuis un groupe/cadre | ✘ | ✔ (v0.10) | **Mental-o devant** |
+
+### Notes et style
+
+| Fonction | Scapple | Mental-o | Verdict |
+|---|---|---|---|
+| Bordure, fond, couleur, coins | ✔ | ✔ (+ trait tirets/pointillé) | Égalité+ |
+| **Texte riche multi-styles dans une même note** | partiel (style par note surtout) | ✔ (segments : police/taille/couleur/gras… par sélection, alignement par ligne) | **Mental-o devant** |
+| Listes à puces dans une note | ✘ | ✔ (v0.9.5) | **Mental-o devant** |
+| Ombre et opacité des notes | ✔ (fade/apparence) | ✔ (v0.12) | Égalité |
+| Palette de styles réutilisables | ✔ (Inspector + **Cmd-Opt-1 à 9**) | ✔ styles favoris (clic droit) | Égalité — les raccourcis clavier manquent |
+| Styles par défaut du document | ✔ | ✔ (v0.12, par fichier : boîtes, liens **et** groupes) | **Mental-o devant** |
+| Images dans les notes | ✔ | ✔ (+ texte avant/après l'image) | Égalité+ |
+| Équations MathType | ✔ (Mac) | ✘ | Hors périmètre |
+| Correcteur orthographique (système) | ✔ | ✘ | À envisager (v1.0+) |
+
+### Vue et confort
+
+| Fonction | Scapple | Mental-o | Verdict |
+|---|---|---|---|
+| Zoom, pan, molette | ✔ (+ « Z » maintenu = vue globale) | ✔ | Égalité — « zoom pour tout voir » à piquer (déjà au §6) |
+| Plein écran | ✔ | ✔ F11 + **mode présentation** F5 (v0.13) | **Mental-o devant** |
+| Recherche | ✔ | ✔ (Ctrl+F, navigation, centrage) | Égalité |
+| Alignement / distribution | ✔ | ✔ + magnétisme et guides au glisser | **Mental-o devant** |
+| Mini-carte, inspecteur, historique flottants | ✘ | ✔ | **Mental-o devant** |
+| Modes d'interaction (auto/déplacement/liens/lecture) | ✘ | ✔ | **Mental-o devant** |
+| Fond du canevas personnalisable | ✔ (+ **image en mosaïque**) | ✔ couleur + motifs (pas d'image) | Presque égalité |
+| Mode sombre | ✔ | ✔ (thème complet re-templété) | Égalité |
+| Raccourcis personnalisables + profils | ✘ | ✔ | **Mental-o devant** |
+| Sauvegarde auto | ✔ (auto-save système Mac) | ✔ (3 min, option du fichier) | Égalité — la **récupération après plantage** reste à faire |
+| iCloud / Quick Look | ✔ (Mac) | ✘ | Hors périmètre Windows |
+
+### Import / export
+
+| Fonction | Scapple | Mental-o | Verdict |
+|---|---|---|---|
+| Export PNG | ✔ | ✔ (échelle 2×) | Égalité |
+| Export PDF | ✔ | ✔ (v0.13, via Microsoft Print to PDF) | Égalité |
+| Export SVG | ✘ | ✔ | **Mental-o devant** |
+| Export texte / liste à puces | ✔ (txt, liste indentée) | ✔ Markdown (arbre par liens) | Égalité+ |
+| Export RTF / RTFD | ✔ | ✘ | Faible priorité |
+| **Export OPML** (échange mind-map) | ✔ | ✔ (v0.13) | Égalité |
+| Export dossier d'images | ✔ | ✘ | Faible priorité |
+| **Impression** | ✔ | ✔ (v0.13, Ctrl+P, ajustée à la page) | Égalité |
+| Import texte / fichiers par glisser | ✔ (txt, RTF, PDF, images) | images ✔ ; texte à puces ✔ (dialogue v0.12) — pas de dépôt direct de .txt | Presque égalité — dépôt de .txt à envisager |
+| Import OPML | ✘ (demande récurrente jamais exaucée) | ✔ (v0.13) | **Mental-o devant** 😏 |
+| Intégration Scrivener | ✔ (raison d'être) | ✘ | Hors périmètre |
+
+### Bilan pour la roadmap
+
+Mental-o couvre déjà l'essentiel de Scapple et le dépasse sur le texte riche, les liens
+(courbes, équerre, groupes), les modes, les panneaux et la personnalisation. Les manques
+réels face à Scapple, par ordre de valeur — **points 1 à 5 livrés en v0.13 (03/08/2026)** :
+
+1. ~~**Insérer une note au milieu d'un lien**~~ ✔ v0.13 — clic droit sur le lien.
+2. ~~**Export PDF + impression**~~ ✔ v0.13 — Fichier > Exporter > PDF, Imprimer (Ctrl+P).
+3. ~~**Export OPML**~~ ✔ v0.13 — export **et import**, ce que Scapple refuse de faire
+   depuis des années.
+4. ~~**Piles / « empiler la sélection »**~~ ✔ v0.13 — menu Édition et clic droit.
+5. ~~**Plein écran / mode présentation**~~ ✔ v0.13 — F11, et F5 pour la présentation.
+6. **Divers v1.0+** (laissés pour plus tard) : correcteur orthographique, image de fond
+   en mosaïque, dépôt direct de fichiers .txt, raccourcis 1-9 pour les styles favoris.
+
+Ces points rejoignent le vivier du §6 ; le reste du §6 (mini-carte évoluée, tags/filtres,
+calques, hyperliens/notes cachées, plier les groupes…) est constitué de fonctions que
+Scapple n'a même pas — c'est là que Mental-o creuse son propre sillon. 🍵
+
+## 8. Journal
 
 - **31/07/2026** — Plan validé, décisions actées. Démarrage de la v0.1.
 - **31/07/2026** — **v0.1 livrée** : canevas (pan/zoom), création de boîtes au double-clic, édition du texte, déplacement, suppression, sélection, enregistrement/ouverture `.zeubi`, annuler/rétablir (bonus anticipé de la v0.7). Compilé avec csc, exe de 31 Ko. Prochaine étape : v0.2 (liens par poignées draggables).
@@ -203,6 +290,8 @@ Vivier d'idées à trier ensemble — rien n'est engagé, tout est discutable.
 - **31/07/2026** — **Interface modernisée** (`src\Vue\Theme.cs`) : dictionnaire de styles WPF appliqué à toute l'application au démarrage — boutons et bascules arrondis avec états survol/actif à l'accent bleu, listes déroulantes re-templétées (popup arrondi ombré, éditables comprises), menus et menus contextuels modernes (surbrillance arrondie, coches et flèches dessinées, ombres portées), zones de texte à focus accentué, cases à cocher pleines, onglets soulignés, barres de défilement fines, infobulles arrondies. Aucun changement architectural : purement des gabarits. Le sélecteur de couleurs Windows (non stylable) est remplacé par un **sélecteur maison** (`SelecteurCouleur.cs`) : carré saturation/luminosité, barre de teinte, champ hexadécimal, aperçu — plus aucune dépendance visuelle au style système. Chrome de fenêtre (barre de titre) volontairement conservé.
 - **31/07/2026** — **Étiquettes, « Barre d'outils : » et mode sombre.** Chaque liste déroulante des barres porte désormais une petite étiquette au-dessus d'elle (Police, Taille, Couleur, Fond, Bordure, Cadre, Titre, Flèches…) ; la mention « Barre d'outils : » précède les onglets Texte/Boîte/Groupe/Lien. **Thème sombre** : bouton lune/soleil au bout de la barre des modes, mémorisé dans les paramètres — le dictionnaire de styles est re-parsé avec la palette sombre (`Theme.Basculer`) et le « chrome » (barres, panneaux, libellés, icônes) bascule instantanément grâce à des pinceaux partagés mutables (`Chrome.cs`) ; si le fond du tableau est resté sur la couleur par défaut (le motif ne compte pas), il permute vers un bleu très foncé (`CouleurFondEffective`), motifs et titres de groupes adaptés (trait éclairci sur fond sombre).
 - **31/07/2026** — Ajustements : bouton de thème ancré tout à droite de la barre des modes ; **vignette** (très légère ombre dégradée sur les quatre bords du tableau, calque non cliquable), désactivable dans Paramètres > Apparence, activée par défaut ; les raccourcis retirés du pied de l'application (le Tust les porte), la barre d'état ne garde que le zoom.
+- **03/08/2026** — **v0.13 : les cinq priorités du comparatif Scapple, livrées.** **Insérer une boîte au milieu d'un lien** (clic droit sur le lien) : l'original devient deux tronçons de même style — l'étiquette reste sur le premier, une flèche simple file vers la cible —, la boîte neuve s'édite aussitôt, Échap annule toute l'insertion (lien restauré). **Empiler la sélection** (menu Édition + clic droit multi-sélection, raccourci re-liable sans défaut) : colonne à centres alignés, espacement 14 px, une annulation. **Plein écran** (F11) et **mode présentation** (F5) : présentation = plein écran + barres masquées + mode lecture, Échap restaure tout (mode d'avant compris). **Impression** (Ctrl+P, PrintDialog WPF, carte ajustée-centrée à la page) et **export PDF** sans dépendance : rendu image 2× envoyé à « Microsoft Print to PDF » avec fichier cible imposé (PrintToFile), paysage automatique, repli sur Imprimer si l'imprimante manque. **OPML** : export 2.0 (arborescence des liens, étiquettes entre parenthèses, ownerName) **et import** (outline → boîtes + flèches, via le constructeur d'arbre commun avec le texte à puces — refactorisé en `ConstruireArbreDepuisNiveaux`, forêt Markdown/OPML partagée dans `Export.ConstruireForet`) — testé en aller-retour. `RendreCarte()` factorisé (PNG/PDF/impression). Réf. System.Xml ajoutée au build. §7 mis à jour : plus un seul « à piquer » face à Scapple.
+- **03/08/2026** — **§7 : comparatif Scapple ↔ Mental-o** ajouté au plan (sources : Literature & Latte + revues). Verdict : parité atteinte et dépassée sur le cœur ; à piquer en priorité — insérer une note au milieu d'un lien, export PDF/impression, export (et import !) OPML, « empiler la sélection », plein écran/présentation.
 - **03/08/2026** — **v0.12.1 : styles par défaut par fichier.** Fichier > Préférences de fichier gagne trois onglets — **Boîtes** (fond, bordure couleur/épaisseur/trait, coins, ombre, opacité), **Liens** (couleur, épaisseur, trait, flèches, tracé) et **Groupes** (couleur/trait/épaisseur du cadre) — qui définissent le style des **nouveaux** éléments de la carte (les existants ne bougent pas). Enregistrés dans le `.tea` (v13, champs compacts `boiteDefaut`/`lienDefaut`/`groupeDefaut`), appliqués à la création (boîtes, images, liens — un tracé courbe par défaut naît bombé —, groupes, import de texte à puces qui garde ses flèches). Le clic droit « Utiliser ce style pour les nouvelles boîtes » écrit désormais dans ce même défaut de fichier (persisté, visible dans les préférences) au lieu d'un réglage de session. Bouton « Autre… » sur chaque couleur (sélecteur maison, la couleur rejoint le répertoire du fichier).
 - **03/08/2026** — **v0.12 : liens évolués, apparence, `.tea` et import/export.** **Liens** : tracé au choix — droit, **courbe** (Bézier quadratique, poignée rose de courbure au milieu du trait, annulable) ou **équerre** (coudes dans l'axe dominant) ; **étiquettes** posées au milieu du trait (fond du tableau derrière, via la barre Lien, le clic droit ou « Retirer l'étiquette »). **Apparence des boîtes** : **ombre** réglable (aucune/légère/marquée) et **opacité** (100 à 30 %, bornée à 15 % au rendu pour rester trouvable) — onglet Boîte, clic droit, copier/coller de style et styles favoris (sérialisation passée de 5 à 7 champs, anciens favoris relus). **`.zeubi` → `.tea`** : nouvelle extension par défaut (ouverture des deux, enregistrement en `.tea`), icône `fichier-tea.ico`, `outils\associer-tea.bat`/`dissocier-tea.bat` (remplacent les scripts zeubi et couvrent les deux extensions), et **Fichier > Associer les fichiers .tea à Mental-o** — la même association HKCU écrite depuis l'appli. **Fichier > Ouvrir les fichiers récents** : les 5 derniers `.tea` ouverts/enregistrés (parametres.json), entrée morte retirée avec message, « Vider la liste ». **Import/export** : Fichier > Exporter — **PNG** (échelle 2×, fond compris, artefacts d'interface masqués, rendu via VisualBrush à transformée neutralisée), **SVG** (dessin vectoriel approché : boîtes, texte par lignes/segments, images en base64, liens aux trois tracés avec flèches et étiquettes, cadres et titres de groupes, opacité), **Markdown** (arborescence suivant les liens — les flèches simples orientent la descente, racines = boîtes sans flèche entrante, étiquettes en italique, section Groupes) ; **Importer un texte à puces** (Ctrl+Entrée pour valider) → arbre de boîtes liées par flèches, indentation → niveaux, une seule annulation. Format `.tea` **v13** (tracé/courbure/étiquette des liens, ombre/opacité des boîtes), testé en aller-retour.
 - **31/07/2026** — **v0.11 : la v0.7 « Confort d'édition » est livrée.** **Copier/coller/dupliquer** (Ctrl+C/V/D) : les boîtes se copient avec styles, images et liens internes ; presse-papier interne validé par un marqueur système (copier autre chose ailleurs rend la main au collage d'images), collages décalés en cascade, nouvelle sélection sur les copies, une seule annulation. **Magnétisme + guides** : pendant le glisser, les bords et centres s'aimantent sur ceux des voisines (seuil 7 px), guides roses pointillés à l'écran, Alt pour ignorer, désactivable dans Paramètres > Édition. **Aligner et distribuer** (menu Édition + clic droit multi-sélection) : 6 alignements + distribution H/V à espaces égaux, une seule annulation. **Recherche Ctrl+F** : barre flottante en haut du tableau, résultats en direct, compteur n/N, Entrée/Maj+Entrée pour naviguer, centrage automatique, Échap ferme. **Navigation clavier** : flèches de boîte en boîte (choix directionnel au score), recentrage si hors vue, F2 édite. **Styles favoris** (clic droit > Styles favoris) : enregistrer le style d'une boîte, l'appliquer à toute la sélection, retirer — conservés dans les paramètres de l'application.

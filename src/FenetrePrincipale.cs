@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using Microsoft.Win32;
@@ -48,6 +49,18 @@ namespace Mentalo
         private static readonly RoutedCommand CmdDupliquer = new RoutedCommand();
         private static readonly RoutedCommand CmdRechercher = new RoutedCommand();
         private static readonly RoutedCommand CmdEditer = new RoutedCommand();
+        private static readonly RoutedCommand CmdImprimer = new RoutedCommand();
+        private static readonly RoutedCommand CmdEmpiler = new RoutedCommand();
+        private static readonly RoutedCommand CmdPleinEcran = new RoutedCommand();
+        private static readonly RoutedCommand CmdPresentation = new RoutedCommand();
+
+        // Plein écran et mode présentation
+        private bool _pleinEcran, _presentation;
+        private WindowState _etatAvantPleinEcran = WindowState.Normal;
+        private string _modeAvantPresentation;
+        private Menu _menuPrincipal;
+        private Border _barreModes, _barreEtat;
+        private MenuItem _menuPleinEcran, _menuPresentation;
 
         // Barre de recherche
         private Border _barreRecherche;
@@ -114,12 +127,12 @@ namespace Mentalo
             ParametresGlobaux.Charger();
 
             DockPanel racine = new DockPanel();
-            Menu menu = ConstruireMenu();
-            DockPanel.SetDock(menu, Dock.Top);
-            racine.Children.Add(menu);
-            Border barreModes = ConstruireBarreModes();
-            DockPanel.SetDock(barreModes, Dock.Top);
-            racine.Children.Add(barreModes);
+            _menuPrincipal = ConstruireMenu();
+            DockPanel.SetDock(_menuPrincipal, Dock.Top);
+            racine.Children.Add(_menuPrincipal);
+            _barreModes = ConstruireBarreModes();
+            DockPanel.SetDock(_barreModes, Dock.Top);
+            racine.Children.Add(_barreModes);
             // Barre de personnalisation unique : son contenu suit les onglets de la barre des modes.
             _panneauTexte = ConstruirePanneauTexte();
             _panneauBoites = ConstruirePanneauBoites();
@@ -135,9 +148,9 @@ namespace Mentalo
             };
             DockPanel.SetDock(_barreFormat, Dock.Top);
             racine.Children.Add(_barreFormat);
-            Border barreEtat = ConstruireBarreEtat();
-            DockPanel.SetDock(barreEtat, Dock.Bottom);
-            racine.Children.Add(barreEtat);
+            _barreEtat = ConstruireBarreEtat();
+            DockPanel.SetDock(_barreEtat, Dock.Bottom);
+            racine.Children.Add(_barreEtat);
             Grid zoneCentrale = new Grid();
             zoneCentrale.Children.Add(_toile);
             _vignette = ConstruireVignette();
@@ -254,8 +267,10 @@ namespace Mentalo
             fichier.Items.Add(new Separator());
             MenuItem exporter = new MenuItem { Header = "E_xporter" };
             AjouterActionMenu(exporter, "Image PNG…", delegate { ExporterImage(); });
+            AjouterActionMenu(exporter, "Document PDF…", delegate { ExporterPdf(); });
             AjouterActionMenu(exporter, "Dessin SVG…", delegate { ExporterSvg(); });
             AjouterActionMenu(exporter, "Texte Markdown…", delegate { ExporterMarkdown(); });
+            AjouterActionMenu(exporter, "Plan OPML…", delegate { ExporterOpml(); });
             fichier.Items.Add(exporter);
             MenuItem importerPuces = new MenuItem
             {
@@ -264,6 +279,14 @@ namespace Mentalo
             };
             importerPuces.Click += delegate { ImporterTexteAPuces(); };
             fichier.Items.Add(importerPuces);
+            MenuItem importerOpml = new MenuItem
+            {
+                Header = "Importer un plan OPM_L…",
+                ToolTip = "Chaque élément du plan devient une boîte, la hiérarchie devient des liens fléchés"
+            };
+            importerOpml.Click += delegate { ImporterOpml(); };
+            fichier.Items.Add(importerOpml);
+            fichier.Items.Add(Element("Im_primer…", CmdImprimer, GesteDe("imprimer")));
             fichier.Items.Add(new Separator());
             MenuItem preferences = new MenuItem { Header = "Préférences de _fichier…" };
             preferences.Click += delegate { OuvrirPreferencesFichier(); };
@@ -314,6 +337,13 @@ namespace Mentalo
             AjouterActionMenu(aligner, "Distribuer horizontalement", delegate { _toile.DistribuerSelection(true); });
             AjouterActionMenu(aligner, "Distribuer verticalement", delegate { _toile.DistribuerSelection(false); });
             edition.Items.Add(aligner);
+            MenuItem empiler = new MenuItem
+            {
+                Header = "E_mpiler la sélection",
+                Command = CmdEmpiler,
+                ToolTip = "Range les boîtes sélectionnées en colonne, centres alignés"
+            };
+            edition.Items.Add(empiler);
             menu.Items.Add(edition);
 
             MenuItem insertion = new MenuItem { Header = "_Insertion" };
@@ -326,6 +356,12 @@ namespace Mentalo
             affichage.Items.Add(Element("Zoom _100 %", CmdZoomCent, "Ctrl+0"));
             affichage.Items.Add(new Separator());
             affichage.Items.Add(Element("_Recentrer la carte", CmdRecentrer, "Ctrl+R"));
+            affichage.Items.Add(new Separator());
+            _menuPleinEcran = Element("_Plein écran", CmdPleinEcran, GesteDe("plein-ecran"));
+            affichage.Items.Add(_menuPleinEcran);
+            _menuPresentation = Element("Mode pré_sentation", CmdPresentation, GesteDe("presentation"));
+            _menuPresentation.ToolTip = "Plein écran, barres masquées, lecture seule — Échap pour sortir";
+            affichage.Items.Add(_menuPresentation);
             menu.Items.Add(affichage);
 
             MenuItem fenetres = new MenuItem { Header = "Fenê_tres" };
@@ -355,11 +391,15 @@ namespace Mentalo
             aPropos.Click += delegate
             {
                 MessageBox.Show(this,
-                    "Mental-o — v0.12\n\nLogiciel de carte mentale, simple et léger.\n\n" +
+                    "Mental-o — v0.13\n\nLogiciel de carte mentale, simple et léger.\n\n" +
                     "Fichiers .tea (l'ancien .zeubi s'ouvre toujours) · Fichier > Fichiers récents\n" +
                     "Liens : tracé droit, courbe (poignée rose de courbure) ou équerre ; étiquette au milieu\n" +
+                    "Clic droit sur un lien : insérer une boîte au milieu (le lien devient deux tronçons)\n" +
                     "Boîtes : ombre (aucune/légère/marquée) et opacité réglables (onglet Boîte ou clic droit)\n" +
-                    "Fichier > Exporter : PNG, SVG, Markdown · Importer un texte à puces → arbre de boîtes\n" +
+                    "Édition > Empiler la sélection : ranger les boîtes en colonne\n" +
+                    "Fichier > Exporter : PNG, PDF, SVG, Markdown, OPML · Imprimer (Ctrl+P)\n" +
+                    "Importer : texte à puces ou plan OPML → arbre de boîtes liées\n" +
+                    "Affichage : plein écran (F11), mode présentation (F5, Échap pour sortir)\n" +
                     "Fichier > Associer les fichiers .tea : double-clic dans l'Explorateur\n\n" +
                     "Ctrl+C/V/D : copier, coller, dupliquer des boîtes (liens internes compris)\n" +
                     "Ctrl+F : rechercher · Flèches : naviguer de boîte en boîte · F2 : éditer\n" +
@@ -1553,6 +1593,10 @@ namespace Mentalo
             CommandBindings.Add(new CommandBinding(CmdDupliquer, delegate { _toile.DupliquerSelection(); }));
             CommandBindings.Add(new CommandBinding(CmdRechercher, delegate { OuvrirRecherche(); }));
             CommandBindings.Add(new CommandBinding(CmdEditer, delegate { _toile.EditerSelection(); }));
+            CommandBindings.Add(new CommandBinding(CmdImprimer, delegate { Imprimer(); }));
+            CommandBindings.Add(new CommandBinding(CmdEmpiler, delegate { _toile.EmpilerSelection(); }));
+            CommandBindings.Add(new CommandBinding(CmdPleinEcran, delegate { BasculerPleinEcran(); }));
+            CommandBindings.Add(new CommandBinding(CmdPresentation, delegate { BasculerPresentation(); }));
 
             CommandBindings.Add(new CommandBinding(CmdSupprimer, delegate { _toile.SupprimerSelection(); }));
 
@@ -1570,6 +1614,10 @@ namespace Mentalo
                 { "dupliquer", CmdDupliquer },
                 { "rechercher", CmdRechercher },
                 { "editer", CmdEditer },
+                { "imprimer", CmdImprimer },
+                { "empiler", CmdEmpiler },
+                { "plein-ecran", CmdPleinEcran },
+                { "presentation", CmdPresentation },
                 { "supprimer", CmdSupprimer },
                 { "grouper", CmdGrouper },
                 { "degrouper", CmdDegrouper },
@@ -1631,6 +1679,11 @@ namespace Mentalo
             {
                 _toile.ModePanClavier(true);
                 e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                if (_presentation) { QuitterPresentation(); e.Handled = true; }
+                else if (_pleinEcran) { DefinirPleinEcran(false); e.Handled = true; }
             }
             else if (e.Key == Key.Left) { _toile.NaviguerSelection(-1, 0); e.Handled = true; }
             else if (e.Key == Key.Right) { _toile.NaviguerSelection(1, 0); e.Handled = true; }
@@ -1906,6 +1959,177 @@ namespace Mentalo
             MettreAJourVignette();
         }
 
+        // ------------------------------------------------------------------ plein écran & présentation
+
+        private void BasculerPleinEcran()
+        {
+            if (_presentation) { QuitterPresentation(); return; }
+            DefinirPleinEcran(!_pleinEcran);
+        }
+
+        private void DefinirPleinEcran(bool actif)
+        {
+            if (_pleinEcran == actif) return;
+            _pleinEcran = actif;
+            if (actif)
+            {
+                _etatAvantPleinEcran = WindowState;
+                WindowStyle = WindowStyle.None;
+                ResizeMode = ResizeMode.NoResize;
+                // Repasser par Normal force le recalcul : Maximized couvre alors l'écran entier.
+                WindowState = WindowState.Normal;
+                WindowState = WindowState.Maximized;
+            }
+            else
+            {
+                WindowStyle = WindowStyle.SingleBorderWindow;
+                ResizeMode = ResizeMode.CanResize;
+                WindowState = _etatAvantPleinEcran;
+            }
+            MettreAJourMenusAffichage();
+        }
+
+        private void BasculerPresentation()
+        {
+            if (_presentation) QuitterPresentation();
+            else EntrerPresentation();
+        }
+
+        /// <summary>Mode présentation : plein écran, chrome masqué, carte en lecture seule.
+        /// Échap restaure tout.</summary>
+        private void EntrerPresentation()
+        {
+            if (_presentation) return;
+            _presentation = true;
+            _modeAvantPresentation = _toile.Mode;
+            _toile.DefinirMode("lecture");
+            _menuPrincipal.Visibility = Visibility.Collapsed;
+            _barreModes.Visibility = Visibility.Collapsed;
+            _barreFormat.Visibility = Visibility.Collapsed;
+            _barreEtat.Visibility = Visibility.Collapsed;
+            DefinirPleinEcran(true);
+            MettreAJourMenusAffichage();
+            _toile.Focus();
+        }
+
+        private void QuitterPresentation()
+        {
+            if (!_presentation) return;
+            _presentation = false;
+            _menuPrincipal.Visibility = Visibility.Visible;
+            _barreModes.Visibility = Visibility.Visible;
+            _barreFormat.Visibility = Visibility.Visible;
+            _barreEtat.Visibility = Visibility.Visible;
+            DefinirPleinEcran(false);
+            _toile.DefinirMode(string.IsNullOrEmpty(_modeAvantPresentation) ? "automatique" : _modeAvantPresentation);
+            MettreAJourBarreModes();
+            MettreAJourMenusAffichage();
+        }
+
+        private void MettreAJourMenusAffichage()
+        {
+            if (_menuPleinEcran != null) _menuPleinEcran.IsChecked = _pleinEcran && !_presentation;
+            if (_menuPresentation != null) _menuPresentation.IsChecked = _presentation;
+        }
+
+        // ------------------------------------------------------------------ impression & PDF
+
+        private void Imprimer()
+        {
+            string erreur;
+            BitmapSource carte = _toile.RendreCarte(out erreur);
+            if (carte == null)
+            {
+                MessageBox.Show(this, string.Format("Impression impossible :\n{0}", erreur),
+                    "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            PrintDialog dialogue = new PrintDialog();
+            if (dialogue.ShowDialog() != true) return;
+            try
+            {
+                double largeurZone = dialogue.PrintableAreaWidth;
+                double hauteurZone = dialogue.PrintableAreaHeight;
+                double echelle = Math.Min(largeurZone / carte.Width, hauteurZone / carte.Height);
+                double largeur = carte.Width * echelle, hauteur = carte.Height * echelle;
+                DrawingVisual visuel = new DrawingVisual();
+                using (DrawingContext contexte = visuel.RenderOpen())
+                    contexte.DrawImage(carte, new Rect(
+                        (largeurZone - largeur) / 2, (hauteurZone - hauteur) / 2, largeur, hauteur));
+                dialogue.PrintVisual(visuel, "Mental-o — " + NomExport());
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, string.Format("Impression impossible :\n{0}", ex.Message),
+                    "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        /// <summary>Export PDF sans dépendance : la carte rendue en image passe par
+        /// l'imprimante « Microsoft Print to PDF » de Windows, fichier cible imposé.</summary>
+        private void ExporterPdf()
+        {
+            string chemin = DemanderCheminExport("Document PDF (*.pdf)|*.pdf", ".pdf");
+            if (chemin == null) return;
+            string erreur;
+            BitmapSource carte = _toile.RendreCarte(out erreur);
+            if (carte == null)
+            {
+                MessageBox.Show(this, string.Format("Export impossible :\n{0}", erreur),
+                    "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            try
+            {
+                System.Drawing.Printing.PrintDocument document = new System.Drawing.Printing.PrintDocument();
+                document.PrinterSettings.PrinterName = "Microsoft Print to PDF";
+                if (!document.PrinterSettings.IsValid)
+                {
+                    MessageBox.Show(this,
+                        "L'imprimante « Microsoft Print to PDF » est introuvable sur cette machine.\n" +
+                        "Passez par Fichier > Imprimer et choisissez une imprimante PDF.",
+                        "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+                document.PrinterSettings.PrintToFile = true;
+                document.PrinterSettings.PrintFileName = chemin;
+                document.DefaultPageSettings.Landscape = carte.Width > carte.Height;
+                document.DefaultPageSettings.Margins = new System.Drawing.Printing.Margins(30, 30, 30, 30);
+                document.PrintController = new System.Drawing.Printing.StandardPrintController(); // pas de fenêtre de progression
+                System.Drawing.Bitmap image = ConvertirEnBitmap(carte);
+                document.PrintPage += delegate(object expediteur, System.Drawing.Printing.PrintPageEventArgs e)
+                {
+                    System.Drawing.Rectangle zone = e.MarginBounds;
+                    double echelle = Math.Min((double)zone.Width / image.Width, (double)zone.Height / image.Height);
+                    int largeur = Math.Max(1, (int)(image.Width * echelle));
+                    int hauteur = Math.Max(1, (int)(image.Height * echelle));
+                    e.Graphics.DrawImage(image, zone.X + (zone.Width - largeur) / 2,
+                        zone.Y + (zone.Height - hauteur) / 2, largeur, hauteur);
+                    e.HasMorePages = false;
+                };
+                document.Print();
+                image.Dispose();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, string.Format("Export impossible :\n{0}", ex.Message),
+                    "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private static System.Drawing.Bitmap ConvertirEnBitmap(BitmapSource source)
+        {
+            PngBitmapEncoder encodeur = new PngBitmapEncoder();
+            encodeur.Frames.Add(BitmapFrame.Create(source));
+            using (MemoryStream flux = new MemoryStream())
+            {
+                encodeur.Save(flux);
+                flux.Position = 0;
+                using (System.Drawing.Bitmap liee = new System.Drawing.Bitmap(flux))
+                    return new System.Drawing.Bitmap(liee); // copie détachée du flux
+            }
+        }
+
         // ------------------------------------------------------------------ import / export
 
         /// <summary>Le nom proposé pour un fichier exporté, calqué sur la carte ouverte.</summary>
@@ -1961,6 +2185,47 @@ namespace Mentalo
             catch (Exception ex)
             {
                 MessageBox.Show(this, string.Format("Export impossible :\n{0}", ex.Message),
+                    "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private void ExporterOpml()
+        {
+            string chemin = DemanderCheminExport("Plan OPML (*.opml)|*.opml", ".opml");
+            if (chemin == null) return;
+            try
+            {
+                Export.ExporterOpml(_toile.Document, NomExport(), chemin);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, string.Format("Export impossible :\n{0}", ex.Message),
+                    "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private void ImporterOpml()
+        {
+            OpenFileDialog dialogue = new OpenFileDialog();
+            dialogue.Filter = "Plan OPML (*.opml;*.xml)|*.opml;*.xml|Tous les fichiers (*.*)|*.*";
+            dialogue.DefaultExt = ".opml";
+            if (dialogue.ShowDialog(this) != true) return;
+            try
+            {
+                List<Noeud> noeuds;
+                List<Lien> liens;
+                Export.ImporterOpml(dialogue.FileName, _toile.CentreCanvas(), out noeuds, out liens);
+                if (noeuds.Count == 0)
+                {
+                    MessageBox.Show(this, "Aucun élément exploitable dans ce plan.",
+                        "Mental-o", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+                _toile.ImporterArbre(noeuds, liens);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, string.Format("Import impossible :\n{0}", ex.Message),
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
