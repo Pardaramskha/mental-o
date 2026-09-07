@@ -40,6 +40,7 @@ namespace Mentalo
         private static readonly RoutedCommand CmdItalique = new RoutedCommand();
         private static readonly RoutedCommand CmdSouligne = new RoutedCommand();
         private static readonly RoutedCommand CmdInsererImage = new RoutedCommand();
+        private static readonly RoutedCommand CmdInsererFichier = new RoutedCommand();
         private static readonly RoutedCommand CmdGrouper = new RoutedCommand();
         private static readonly RoutedCommand CmdDegrouper = new RoutedCommand();
         private static readonly RoutedCommand CmdModeAuto = new RoutedCommand();
@@ -348,6 +349,9 @@ namespace Mentalo
 
             MenuItem insertion = new MenuItem { Header = "_Insertion" };
             insertion.Items.Add(Element("_Image…", CmdInsererImage, "Ctrl+Maj+I"));
+            MenuItem insererFichier = Element("_Fichier…", CmdInsererFichier, GesteDe("inserer-fichier"));
+            insererFichier.ToolTip = "Lie un fichier (tout sauf une image) à la boîte sélectionnée, ou dans une boîte neuve";
+            insertion.Items.Add(insererFichier);
             menu.Items.Add(insertion);
 
             MenuItem affichage = new MenuItem { Header = "_Affichage" };
@@ -390,8 +394,10 @@ namespace Mentalo
             MenuItem aPropos = new MenuItem { Header = "À _propos de Mental-o…" };
             aPropos.Click += delegate
             {
-                MessageBox.Show(this,
-                    "Mental-o — v0.13\n\nLogiciel de carte mentale, simple et léger.\n\n" +
+                DialogueMessage.Afficher(this,
+                    "Mental-o — v0.14\n\nLogiciel de carte mentale, simple et léger.\n\n" +
+                    "Fichiers attachés : Insertion > Fichier (Ctrl+Maj+F), glisser-déposer ou clic droit > Insérer un fichier\n" +
+                    "  → lien cliquable sous le texte : ouvrir, renommer, remplacer, intégrer au .tea (carte portable), supprimer\n" +
                     "Fichiers .tea (l'ancien .zeubi s'ouvre toujours) · Fichier > Fichiers récents\n" +
                     "Liens : tracé droit, courbe (poignée rose de courbure) ou équerre ; étiquette au milieu\n" +
                     "Clic droit sur un lien : insérer une boîte au milieu (le lien devient deux tronçons)\n" +
@@ -1577,6 +1583,7 @@ namespace Mentalo
             CommandBindings.Add(new CommandBinding(CmdItalique, delegate { _toile.AppliquerFormatTexte("italique", null); }));
             CommandBindings.Add(new CommandBinding(CmdSouligne, delegate { _toile.AppliquerFormatTexte("souligne", null); }));
             CommandBindings.Add(new CommandBinding(CmdInsererImage, delegate { ChoisirImage(); }));
+            CommandBindings.Add(new CommandBinding(CmdInsererFichier, delegate { ChoisirFichier(); }));
             CommandBindings.Add(new CommandBinding(CmdGrouper, delegate { _toile.GrouperSelection(); }));
             CommandBindings.Add(new CommandBinding(CmdDegrouper, delegate { _toile.DegrouperSelection(); }));
             CommandBindings.Add(new CommandBinding(CmdModeAuto, delegate { _toile.DefinirMode("automatique"); MettreAJourBarreModes(); }));
@@ -1622,6 +1629,7 @@ namespace Mentalo
                 { "grouper", CmdGrouper },
                 { "degrouper", CmdDegrouper },
                 { "inserer-image", CmdInsererImage },
+                { "inserer-fichier", CmdInsererFichier },
                 { "zoom-avant", CmdZoomAvant },
                 { "zoom-arriere", CmdZoomArriere },
                 { "zoom-100", CmdZoomCent },
@@ -1826,6 +1834,8 @@ namespace Mentalo
             {
                 Rect rect = _toile.RectangleDuNoeud(noeud);
                 string type = noeud.EstImage ? "Boîte-image" : "Boîte";
+                if (noeud.Fichiers.Count > 0)
+                    type += string.Format(" · {0} fichier{1} lié{1}", noeud.Fichiers.Count, noeud.Fichiers.Count > 1 ? "s" : "");
                 string extra = _toile.NbSelectionnes > 1
                     ? string.Format("\n({0} boîtes sélectionnées)", _toile.NbSelectionnes) : "";
                 _inspecteurTexte.Text = string.Format(
@@ -2040,7 +2050,7 @@ namespace Mentalo
             BitmapSource carte = _toile.RendreCarte(out erreur);
             if (carte == null)
             {
-                MessageBox.Show(this, string.Format("Impression impossible :\n{0}", erreur),
+                DialogueMessage.Afficher(this, string.Format("Impression impossible :\n{0}", erreur),
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
@@ -2060,7 +2070,7 @@ namespace Mentalo
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, string.Format("Impression impossible :\n{0}", ex.Message),
+                DialogueMessage.Afficher(this, string.Format("Impression impossible :\n{0}", ex.Message),
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
@@ -2075,7 +2085,7 @@ namespace Mentalo
             BitmapSource carte = _toile.RendreCarte(out erreur);
             if (carte == null)
             {
-                MessageBox.Show(this, string.Format("Export impossible :\n{0}", erreur),
+                DialogueMessage.Afficher(this, string.Format("Export impossible :\n{0}", erreur),
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
@@ -2085,7 +2095,7 @@ namespace Mentalo
                 document.PrinterSettings.PrinterName = "Microsoft Print to PDF";
                 if (!document.PrinterSettings.IsValid)
                 {
-                    MessageBox.Show(this,
+                    DialogueMessage.Afficher(this,
                         "L'imprimante « Microsoft Print to PDF » est introuvable sur cette machine.\n" +
                         "Passez par Fichier > Imprimer et choisissez une imprimante PDF.",
                         "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -2112,7 +2122,7 @@ namespace Mentalo
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, string.Format("Export impossible :\n{0}", ex.Message),
+                DialogueMessage.Afficher(this, string.Format("Export impossible :\n{0}", ex.Message),
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
@@ -2155,7 +2165,7 @@ namespace Mentalo
             if (chemin == null) return;
             string erreur;
             if (!_toile.ExporterPng(chemin, out erreur))
-                MessageBox.Show(this, string.Format("Export impossible :\n{0}", erreur),
+                DialogueMessage.Afficher(this, string.Format("Export impossible :\n{0}", erreur),
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
 
@@ -2169,7 +2179,7 @@ namespace Mentalo
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, string.Format("Export impossible :\n{0}", ex.Message),
+                DialogueMessage.Afficher(this, string.Format("Export impossible :\n{0}", ex.Message),
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
@@ -2184,7 +2194,7 @@ namespace Mentalo
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, string.Format("Export impossible :\n{0}", ex.Message),
+                DialogueMessage.Afficher(this, string.Format("Export impossible :\n{0}", ex.Message),
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
@@ -2199,7 +2209,7 @@ namespace Mentalo
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, string.Format("Export impossible :\n{0}", ex.Message),
+                DialogueMessage.Afficher(this, string.Format("Export impossible :\n{0}", ex.Message),
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
@@ -2217,7 +2227,7 @@ namespace Mentalo
                 Export.ImporterOpml(dialogue.FileName, _toile.CentreCanvas(), out noeuds, out liens);
                 if (noeuds.Count == 0)
                 {
-                    MessageBox.Show(this, "Aucun élément exploitable dans ce plan.",
+                    DialogueMessage.Afficher(this, "Aucun élément exploitable dans ce plan.",
                         "Mental-o", MessageBoxButton.OK, MessageBoxImage.Information);
                     return;
                 }
@@ -2225,7 +2235,7 @@ namespace Mentalo
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, string.Format("Import impossible :\n{0}", ex.Message),
+                DialogueMessage.Afficher(this, string.Format("Import impossible :\n{0}", ex.Message),
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
@@ -2241,7 +2251,7 @@ namespace Mentalo
             Export.ImporterTexteAPuces(texte, _toile.CentreCanvas(), out noeuds, out liens);
             if (noeuds.Count == 0)
             {
-                MessageBox.Show(this, "Aucune ligne exploitable dans ce texte.",
+                DialogueMessage.Afficher(this, "Aucune ligne exploitable dans ce texte.",
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
@@ -2254,6 +2264,19 @@ namespace Mentalo
             dialogue.Filter = "Images (*.png;*.jpg;*.jpeg;*.gif;*.bmp)|*.png;*.jpg;*.jpeg;*.gif;*.bmp|Tous les fichiers (*.*)|*.*";
             if (dialogue.ShowDialog(this) == true)
                 _toile.InsererImageDepuisFichier(dialogue.FileName);
+        }
+
+        /// <summary>Insertion > Fichier : un ou plusieurs fichiers, liés à la boîte sélectionnée
+        /// ou placés dans des boîtes neuves. Une image choisie ici suit la voie des images.</summary>
+        private void ChoisirFichier()
+        {
+            OpenFileDialog dialogue = new OpenFileDialog();
+            dialogue.Title = "Insérer un ou plusieurs fichiers";
+            dialogue.Filter = "Tous les fichiers (*.*)|*.*";
+            dialogue.Multiselect = true;
+            if (dialogue.ShowDialog(this) != true) return;
+            foreach (string chemin in dialogue.FileNames)
+                _toile.InsererFichierDepuisChemin(chemin);
         }
 
         private void Nouveau()
@@ -2288,7 +2311,7 @@ namespace Mentalo
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this,
+                DialogueMessage.Afficher(this,
                     string.Format("Impossible d'ouvrir le fichier :\n{0}", ex.Message),
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -2338,7 +2361,7 @@ namespace Mentalo
         {
             if (!File.Exists(chemin))
             {
-                MessageBox.Show(this,
+                DialogueMessage.Afficher(this,
                     string.Format("« {0} » n'existe plus : il est retiré de la liste.", chemin),
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
                 ParametresGlobaux.FichiersRecents.RemoveAll(delegate(string existant)
@@ -2376,14 +2399,14 @@ namespace Mentalo
                     using (RegistryKey cle = classes.CreateSubKey(@"Mentalo.Carte\shell\open\command"))
                         cle.SetValue(null, "\"" + exe + "\" \"%1\"");
                 }
-                MessageBox.Show(this,
+                DialogueMessage.Afficher(this,
                     "C'est fait : le double-clic sur un fichier .tea (ou .zeubi) ouvrira Mental-o.\n" +
                     "Si l'Explorateur affiche encore l'ancienne icône, elle se rafraîchira à la prochaine session.",
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this,
+                DialogueMessage.Afficher(this,
                     string.Format("Impossible d'enregistrer l'association :\n{0}", ex.Message),
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -2418,7 +2441,7 @@ namespace Mentalo
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this,
+                DialogueMessage.Afficher(this,
                     string.Format("Impossible d'enregistrer le fichier :\n{0}", ex.Message),
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Error);
                 return false;
@@ -2429,7 +2452,7 @@ namespace Mentalo
         {
             if (!_modifie) return true;
             string nom = _cheminFichier == null ? "sans titre" : System.IO.Path.GetFileName(_cheminFichier);
-            MessageBoxResult reponse = MessageBox.Show(this,
+            MessageBoxResult reponse = DialogueMessage.Afficher(this,
                 string.Format("Voulez-vous enregistrer les modifications de « {0} » ?", nom),
                 "Mental-o", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
             if (reponse == MessageBoxResult.Cancel) return false;

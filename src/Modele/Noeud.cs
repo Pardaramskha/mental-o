@@ -25,6 +25,15 @@ namespace Mentalo.Modele
 
         public bool EstImage { get { return ImageDonnees != null; } }
 
+        /// <summary>Les fichiers attachés (v0.14), affichés en liens sous le texte.</summary>
+        public List<PieceJointe> Fichiers { get; set; }
+
+        /// <summary>Une boîte sans texte, sans image et sans fichier n'a pas de raison d'exister.</summary>
+        public bool EstVide
+        {
+            get { return string.IsNullOrWhiteSpace(TextePlat) && !EstImage && Fichiers.Count == 0; }
+        }
+
         // Style de la boîte
         public string FondCouleur { get; set; }
         public string BordureCouleur { get; set; }
@@ -39,6 +48,7 @@ namespace Mentalo.Modele
             Id = Guid.NewGuid().ToString("N");
             Segments = new List<Segment>();
             SegmentsApres = new List<Segment>();
+            Fichiers = new List<PieceJointe>();
             Alignement = "gauche";
             FondCouleur = "#FFFFFF";
             BordureCouleur = "#B8B2A7";

@@ -34,6 +34,10 @@ namespace Mentalo.Vue
         private static readonly Brush PinceauSelection = new SolidColorBrush(Color.FromRgb(0x00, 0x78, 0xD7));
         private static readonly Brush PinceauCible = new SolidColorBrush(Color.FromRgb(0x2E, 0x8B, 0x57));
         private static readonly Brush PinceauEncre = new SolidColorBrush(Color.FromRgb(0x1C, 0x1B, 0x19));
+        // Liens de fichiers : bleu des hyperliens, rouge sourd quand la cible a disparu.
+        private static readonly Brush PinceauLien = new SolidColorBrush(Color.FromRgb(0x0F, 0x6C, 0xC4));
+        private static readonly Brush PinceauLienManquant = new SolidColorBrush(Color.FromRgb(0xC0, 0x39, 0x2B));
+        private static readonly Brush PinceauLienSurvol = new SolidColorBrush(Color.FromArgb(0x22, 0x0F, 0x6C, 0xC4));
 
         public Noeud Modele { get; private set; }
 
@@ -43,6 +47,8 @@ namespace Mentalo.Vue
         // Un TextBlock par ligne (alignement ligne à ligne) empilés dans un StackPanel.
         private readonly StackPanel _affichage;
         private readonly StackPanel _affichageApres;
+        // Les fichiers attachés : un lien par ligne, sous tout le reste (visible même en édition).
+        private readonly StackPanel _fichiers;
         private readonly Image _image;
         private byte[] _imageDecodee; // dernières données décodées, pour ne pas re-décoder à chaque rafraîchissement
         private readonly RichTextBox _editeur;
@@ -68,6 +74,10 @@ namespace Mentalo.Vue
 
         public event Action<NoeudVisuel, ResultatEdition> EditionTerminee;
         public event Action SelectionEditeurChangee;
+
+        /// <summary>Clic (gauche ou droit) sur un lien de fichier : la toile ouvre le menu
+        /// des actions (ouvrir, renommer, intégrer…) ancré sur l'élément fourni.</summary>
+        public event Action<NoeudVisuel, PieceJointe, FrameworkElement> FichierClique;
 
         public bool EnEdition { get { return _enEdition; } }
 
@@ -99,6 +109,8 @@ namespace Mentalo.Vue
             _affichage = new StackPanel();
             _affichageApres = new StackPanel();
             _affichageApres.Visibility = Visibility.Collapsed;
+            _fichiers = new StackPanel();
+            _fichiers.Visibility = Visibility.Collapsed;
 
             _editeur = new RichTextBox();
             _editeur.FontFamily = new FontFamily("Segoe UI");
@@ -122,18 +134,22 @@ namespace Mentalo.Vue
             _image.Visibility = Visibility.Collapsed;
             RenderOptions.SetBitmapScalingMode(_image, BitmapScalingMode.HighQuality);
 
-            // Trois rangées : texte avant, image, texte après. L'éditeur unique recouvre tout.
+            // Quatre rangées : texte avant, image, texte après, fichiers attachés. L'éditeur
+            // unique recouvre les trois premières ; les liens restent cliquables en édition.
+            _contenu.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             _contenu.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             _contenu.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             _contenu.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             Grid.SetRow(_affichage, 0);
             Grid.SetRow(_image, 1);
             Grid.SetRow(_affichageApres, 2);
+            Grid.SetRow(_fichiers, 3);
             Grid.SetRow(_editeur, 0);
             Grid.SetRowSpan(_editeur, 3);
             _contenu.Children.Add(_affichage);
             _contenu.Children.Add(_image);
             _contenu.Children.Add(_affichageApres);
+            _contenu.Children.Add(_fichiers);
             _contenu.Children.Add(_editeur);
 
             MettreAJour();
@@ -255,6 +271,88 @@ namespace Mentalo.Vue
             _affichageApres.Children.Clear();
             foreach (TextBlock bloc in TexteRiche.ConstruireBlocsLignes(Modele.SegmentsApres, Modele.Alignement))
                 _affichageApres.Children.Add(bloc);
+
+            // Fichiers attachés : un lien par ligne, aligné comme le texte.
+            _fichiers.Children.Clear();
+            _fichiers.MaxWidth = _affichage.MaxWidth;
+            if (Modele.Fichiers.Count > 0)
+            {
+                bool contenuAvant = aTexte || image || Modele.SegmentsApres.Count > 0;
+                _fichiers.Margin = new Thickness(0, contenuAvant ? 5 : 0, 0, 0);
+                foreach (PieceJointe piece in Modele.Fichiers)
+                    _fichiers.Children.Add(ConstruireLigneFichier(piece, alignement));
+                _fichiers.Visibility = Visibility.Visible;
+            }
+            else
+                _fichiers.Visibility = Visibility.Collapsed;
+        }
+
+        /// <summary>Une ligne « icône lien + libellé souligné » pour un fichier attaché.
+        /// Le clic, gauche comme droit, est absorbé ici (pas de déplacement de la boîte)
+        /// et remonté à la toile par FichierClique.</summary>
+        private FrameworkElement ConstruireLigneFichier(PieceJointe piece, TextAlignment alignement)
+        {
+            bool manquant = !piece.EstIntegre && !piece.OrigineDisponible;
+            Brush encre = manquant ? PinceauLienManquant : PinceauLien;
+            double taille = Segment.TailleDefaut;
+
+            StackPanel ligne = new StackPanel { Orientation = Orientation.Horizontal };
+            FrameworkElement icone = Icones.Creer("link", Math.Max(10, taille * 0.95));
+            Shape forme = icone as Shape;
+            if (forme != null) forme.Fill = encre;
+            icone.Margin = new Thickness(0, 1, 5, 0);
+            icone.VerticalAlignment = VerticalAlignment.Center;
+            ligne.Children.Add(icone);
+
+            TextBlock libelle = new TextBlock
+            {
+                Text = string.IsNullOrEmpty(piece.Nom) ? (piece.NomFichier ?? "Fichier") : piece.Nom,
+                Foreground = encre,
+                FontFamily = new FontFamily(Segment.PoliceDefaut),
+                FontSize = taille,
+                TextDecorations = TextDecorations.Underline,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            if (manquant) libelle.FontStyle = FontStyles.Italic;
+            ligne.Children.Add(libelle);
+
+            Border cadre = new Border
+            {
+                Background = Brushes.Transparent, // un fond, même transparent, pour recevoir les clics
+                Padding = new Thickness(3, 1, 5, 1),
+                CornerRadius = new CornerRadius(3),
+                Cursor = Cursors.Hand,
+                Child = ligne,
+                HorizontalAlignment = alignement == TextAlignment.Center ? HorizontalAlignment.Center
+                    : alignement == TextAlignment.Right ? HorizontalAlignment.Right
+                    : HorizontalAlignment.Left,
+                ToolTip = InfobulleFichier(piece, manquant)
+            };
+            cadre.MouseEnter += delegate { cadre.Background = PinceauLienSurvol; };
+            cadre.MouseLeave += delegate { cadre.Background = Brushes.Transparent; };
+            MouseButtonEventHandler clic = delegate(object expediteur, MouseButtonEventArgs e)
+            {
+                e.Handled = true;
+                Action<NoeudVisuel, PieceJointe, FrameworkElement> h = FichierClique;
+                if (h != null) h(this, piece, cadre);
+            };
+            cadre.MouseLeftButtonDown += clic;
+            cadre.MouseRightButtonDown += clic;
+            return cadre;
+        }
+
+        private static string InfobulleFichier(PieceJointe piece, bool manquant)
+        {
+            string taille = piece.TailleLisible();
+            if (piece.EstIntegre)
+            {
+                string texte = "Intégré au .tea" + (taille.Length > 0 ? " · " + taille : "");
+                if (!string.IsNullOrEmpty(piece.Chemin)) texte += "\nOrigine : " + piece.Chemin;
+                return texte;
+            }
+            if (manquant) return "Fichier introuvable :\n" + (piece.Chemin ?? piece.NomFichier ?? "");
+            return piece.Chemin + (taille.Length > 0 ? "\n" + taille : "");
         }
 
         public void DefinirSelection(bool selectionne)

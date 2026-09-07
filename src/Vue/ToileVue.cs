@@ -15,7 +15,7 @@ namespace Mentalo.Vue
 {
     /// <summary>Le canevas principal : rendu des nœuds et des liens, navigation (pan/zoom)
     /// et interactions souris, dont la poignée de création de liens.</summary>
-    public class ToileVue : Border
+    public partial class ToileVue : Border
     {
         private const double ZoomMin = 0.2;
         private const double ZoomMax = 4.0;
@@ -609,6 +609,7 @@ namespace Mentalo.Vue
             };
             visuel.FabriqueMenuContextuel = delegate { return ConstruireMenuFormatage(true); };
             visuel.SelectionEditeurChangee += SignalerFormatCible;
+            visuel.FichierClique += OuvrirMenuFichier;
             Canvas.SetLeft(visuel, noeud.X);
             Canvas.SetTop(visuel, noeud.Y);
             Canvas.SetZIndex(visuel, ++_zCompteur);
@@ -1728,9 +1729,9 @@ namespace Mentalo.Vue
             bool fraichementCree = (_noeudFraichementCree == visuel.Modele);
             _noeudFraichementCree = null;
 
-            if (string.IsNullOrWhiteSpace(visuel.Modele.TextePlat) && !visuel.Modele.EstImage)
+            if (visuel.Modele.EstVide)
             {
-                // Une boîte vide n'a pas de raison d'exister (sauf si elle porte une image).
+                // Une boîte vide n'a pas de raison d'exister (sauf si elle porte une image ou un fichier).
                 if (fraichementCree)
                     Historique.AnnulerEtOublier();
                 else
@@ -1838,6 +1839,9 @@ namespace Mentalo.Vue
             copie.ImageExtension = source.ImageExtension;
             copie.ImageLargeur = source.ImageLargeur;
             copie.ImageHauteur = source.ImageHauteur;
+            // Identifiants neufs : deux liens ne partagent pas la même entrée du .tea.
+            foreach (PieceJointe piece in source.Fichiers)
+                copie.Fichiers.Add(piece.ClonerNouvelId());
             StyleBoite.Depuis(source).AppliquerA(copie);
             return copie;
         }
@@ -2947,7 +2951,7 @@ namespace Mentalo.Vue
                 FileInfo informations = new FileInfo(chemin);
                 if (informations.Length > TailleImageMax)
                 {
-                    MessageBox.Show(Window.GetWindow(this),
+                    DialogueMessage.Afficher(Window.GetWindow(this),
                         string.Format("« {0} » dépasse la limite de 5 Mo ({1:0.0} Mo).",
                             informations.Name, informations.Length / 1048576.0),
                         "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -2958,7 +2962,7 @@ namespace Mentalo.Vue
             }
             catch (Exception ex)
             {
-                MessageBox.Show(Window.GetWindow(this),
+                DialogueMessage.Afficher(Window.GetWindow(this),
                     string.Format("Impossible d'importer l'image :\n{0}", ex.Message),
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -2969,7 +2973,7 @@ namespace Mentalo.Vue
             if (_mode == "lecture") return;
             if (donnees.LongLength > TailleImageMax)
             {
-                MessageBox.Show(Window.GetWindow(this), "L'image dépasse la limite de 5 Mo.",
+                DialogueMessage.Afficher(Window.GetWindow(this), "L'image dépasse la limite de 5 Mo.",
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
@@ -2980,7 +2984,7 @@ namespace Mentalo.Vue
             }
             catch
             {
-                MessageBox.Show(Window.GetWindow(this), "Format d'image illisible.",
+                DialogueMessage.Afficher(Window.GetWindow(this), "Format d'image illisible.",
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
@@ -3030,7 +3034,7 @@ namespace Mentalo.Vue
             }
             catch (Exception ex)
             {
-                MessageBox.Show(Window.GetWindow(this),
+                DialogueMessage.Afficher(Window.GetWindow(this),
                     string.Format("Impossible de coller l'image :\n{0}", ex.Message),
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -3047,19 +3051,28 @@ namespace Mentalo.Vue
             if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
             string[] fichiers = (string[])e.Data.GetData(DataFormats.FileDrop);
             Point position = e.GetPosition(_canvas);
-            // Déposée sur une boîte, la première image s'y attache ; le reste devient des boîtes.
+            // Déposés sur une boîte : la première image s'y attache (une seule par boîte),
+            // les autres fichiers s'y lient tous ; le reste devient des boîtes.
             NoeudVisuel noeudCible = NoeudSousPoint(position);
+            bool imageAttachee = false;
             double decalage = 0;
             foreach (string fichier in fichiers)
             {
-                if (!ExtensionImageValide(fichier)) continue;
+                bool image = ExtensionImageValide(fichier);
+                if (!image && !EstFichierAttachable(fichier)) continue; // dossiers, cibles disparues
                 if (noeudCible != null)
                 {
-                    AttacherImage(noeudCible.Modele, fichier);
-                    noeudCible = null;
+                    if (image)
+                    {
+                        if (imageAttachee) { InsererImage(fichier, new Point(position.X + decalage, position.Y + decalage)); decalage += 24; }
+                        else { AttacherImage(noeudCible.Modele, fichier); imageAttachee = true; }
+                    }
+                    else
+                        AttacherFichier(noeudCible.Modele, fichier);
                     continue;
                 }
-                InsererImage(fichier, new Point(position.X + decalage, position.Y + decalage));
+                if (image) InsererImage(fichier, new Point(position.X + decalage, position.Y + decalage));
+                else InsererFichierNouvelleBoite(fichier, new Point(position.X + decalage, position.Y + decalage));
                 decalage += 24;
             }
         }
@@ -3196,7 +3209,7 @@ namespace Mentalo.Vue
                 FileInfo informations = new FileInfo(chemin);
                 if (informations.Length > TailleImageMax)
                 {
-                    MessageBox.Show(Window.GetWindow(this),
+                    DialogueMessage.Afficher(Window.GetWindow(this),
                         string.Format("« {0} » dépasse la limite de 5 Mo ({1:0.0} Mo).",
                             informations.Name, informations.Length / 1048576.0),
                         "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -3211,7 +3224,7 @@ namespace Mentalo.Vue
             }
             catch (Exception ex)
             {
-                MessageBox.Show(Window.GetWindow(this),
+                DialogueMessage.Afficher(Window.GetWindow(this),
                     string.Format("Impossible d'importer l'image :\n{0}", ex.Message),
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -3249,8 +3262,8 @@ namespace Mentalo.Vue
         {
             if (_selection == null || !_selection.Modele.EstImage) return;
             Noeud noeud = _selection.Modele;
-            // Une boîte-image sans texte redeviendrait vide : on la supprime plutôt.
-            if (string.IsNullOrWhiteSpace(noeud.TextePlat))
+            // Une boîte-image sans texte ni fichier redeviendrait vide : on la supprime plutôt.
+            if (string.IsNullOrWhiteSpace(noeud.TextePlat) && noeud.Fichiers.Count == 0)
             {
                 SupprimerSelection();
                 return;
@@ -3572,6 +3585,13 @@ namespace Mentalo.Vue
                 MenuItem insererImageBoite = new MenuItem { Header = "Insérer une image dans la boîte…" };
                 insererImageBoite.Click += delegate { InsererImageDansBoite(); };
                 menu.Items.Add(insererImageBoite);
+                MenuItem insererFichierBoite = new MenuItem
+                {
+                    Header = "Insérer un fichier dans la boîte…",
+                    ToolTip = "Ajoute un lien vers un fichier (tout sauf une image) sous le texte"
+                };
+                insererFichierBoite.Click += delegate { InsererFichierDansBoite(); };
+                menu.Items.Add(insererFichierBoite);
                 if (_selection != null && _selection.Modele.EstImage)
                 {
                     MenuItem retirerImage = new MenuItem { Header = "Retirer l'image" };

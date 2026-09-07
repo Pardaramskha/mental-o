@@ -158,6 +158,27 @@ namespace Mentalo.Historique
         }
     }
 
+    /// <summary>Toute modification des fichiers attachés d'une boîte (ajout, retrait,
+    /// renommage, remplacement, intégration au .tea) : on remplace la liste entière,
+    /// les opérations construisant une liste neuve à partir de copies.</summary>
+    public class CommandeModifierFichiers : ICommande
+    {
+        private readonly ToileVue _toile;
+        private readonly Noeud _noeud;
+        private readonly List<PieceJointe> _anciens, _nouveaux;
+
+        public CommandeModifierFichiers(ToileVue toile, Noeud noeud, List<PieceJointe> nouveaux)
+        {
+            _toile = toile;
+            _noeud = noeud;
+            _anciens = noeud.Fichiers;
+            _nouveaux = nouveaux;
+        }
+
+        public void Executer() { _toile.DefinirFichiersNoeud(_noeud, _nouveaux); }
+        public void Annuler() { _toile.DefinirFichiersNoeud(_noeud, _anciens); }
+    }
+
     public class CommandeRedimensionnerImage : ICommande
     {
         private readonly ToileVue _toile;

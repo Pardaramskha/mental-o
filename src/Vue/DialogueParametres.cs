@@ -166,13 +166,13 @@ namespace Mentalo.Vue
                 if (ouvreur.ShowDialog(dialogue) != true) return;
                 if (ParametresGlobaux.ImporterProfil(ouvreur.FileName))
                 {
-                    MessageBox.Show(dialogue, "Profil importé et appliqué.", "Paramètres",
+                    DialogueMessage.Afficher(dialogue, "Profil importé et appliqué.", "Paramètres",
                         MessageBoxButton.OK, MessageBoxImage.Information);
                     dialogue.Close();
                 }
                 else
                 {
-                    MessageBox.Show(dialogue, "Ce fichier n'est pas un profil de raccourcis valide.",
+                    DialogueMessage.Afficher(dialogue, "Ce fichier n'est pas un profil de raccourcis valide.",
                         "Paramètres", MessageBoxButton.OK, MessageBoxImage.Warning);
                 }
             };

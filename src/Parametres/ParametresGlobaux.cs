@@ -62,6 +62,7 @@ namespace Mentalo.Parametres
             new DefinitionAction("imprimer", "Fichier", "Imprimer", "Ctrl+P"),
             new DefinitionAction("empiler", "Édition", "Empiler la sélection", null),
             new DefinitionAction("inserer-image", "Insertion", "Insérer une image", "Ctrl+Shift+I"),
+            new DefinitionAction("inserer-fichier", "Insertion", "Insérer un fichier", "Ctrl+Shift+F"),
             new DefinitionAction("zoom-avant", "Affichage", "Zoom avant", "Ctrl+Add"),
             new DefinitionAction("zoom-arriere", "Affichage", "Zoom arrière", "Ctrl+Subtract"),
             new DefinitionAction("zoom-100", "Affichage", "Zoom 100 %", "Ctrl+D0"),

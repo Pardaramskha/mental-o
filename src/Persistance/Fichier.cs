@@ -75,6 +75,17 @@ namespace Mentalo.Persistance
         // v13+
         public string ombre { get; set; }
         public double? opacite { get; set; }
+        // v14+ : fichiers attachés (liens) — les octets d'un fichier intégré sont dans le zip, sous zip
+        public List<FichierDto> fichiers { get; set; }
+    }
+
+    public class FichierDto
+    {
+        public string id { get; set; }
+        public string nom { get; set; }         // libellé du lien
+        public string chemin { get; set; }      // chemin d'origine (absolu), peut manquer
+        public string nomFichier { get; set; }  // nom d'origine avec extension
+        public string zip { get; set; }         // "fichiers/<id><ext>" si intégré au .tea, sinon null
     }
 
     public class SegmentDto
@@ -114,7 +125,13 @@ namespace Mentalo.Persistance
         public const string Extension = ".tea";
         public const string FiltreOuverture = "Cartes Mental-o (*.tea;*.zeubi)|*.tea;*.zeubi|Tous les fichiers (*.*)|*.*";
         public const string FiltreEnregistrement = "Carte Mental-o (*.tea)|*.tea|Tous les fichiers (*.*)|*.*";
-        private const int VersionFormat = 13; // … v11 fond + identité ; v12 styles groupes + dates ; v13 tracés/étiquettes de liens + ombres/opacité
+        private const int VersionFormat = 14; // … v12 styles groupes + dates ; v13 tracés/étiquettes de liens + ombres/opacité ; v14 fichiers attachés
+
+        /// <summary>Le nom d'entrée d'un fichier intégré dans l'archive.</summary>
+        private static string EntreeFichier(PieceJointe piece)
+        {
+            return "fichiers/" + piece.Id + piece.Extension;
+        }
 
         public static void Enregistrer(DocumentCarte document, string chemin)
         {
@@ -167,6 +184,20 @@ namespace Mentalo.Persistance
                     nd.imageHauteur = n.ImageHauteur;
                 }
                 if (n.LargeurFixe > 0) nd.largeurFixe = n.LargeurFixe;
+                if (n.Fichiers.Count > 0)
+                {
+                    nd.fichiers = new List<FichierDto>();
+                    foreach (PieceJointe piece in n.Fichiers)
+                    {
+                        FichierDto fd = new FichierDto();
+                        fd.id = piece.Id;
+                        fd.nom = piece.Nom;
+                        fd.chemin = piece.Chemin;
+                        fd.nomFichier = piece.NomFichier;
+                        if (piece.EstIntegre) fd.zip = EntreeFichier(piece);
+                        nd.fichiers.Add(fd);
+                    }
+                }
                 nd.riche = VersDtos(n.Segments);
                 if (n.SegmentsApres.Count > 0) nd.richeApres = VersDtos(n.SegmentsApres);
                 dto.noeuds.Add(nd);
@@ -218,10 +249,19 @@ namespace Mentalo.Persistance
 
                 foreach (Noeud n in document.Noeuds)
                 {
-                    if (!n.EstImage) continue;
-                    ZipArchiveEntry entreeImage = archive.CreateEntry("images/" + n.Id + (n.ImageExtension ?? ".png"));
-                    using (Stream fluxImage = entreeImage.Open())
-                        fluxImage.Write(n.ImageDonnees, 0, n.ImageDonnees.Length);
+                    if (n.EstImage)
+                    {
+                        ZipArchiveEntry entreeImage = archive.CreateEntry("images/" + n.Id + (n.ImageExtension ?? ".png"));
+                        using (Stream fluxImage = entreeImage.Open())
+                            fluxImage.Write(n.ImageDonnees, 0, n.ImageDonnees.Length);
+                    }
+                    foreach (PieceJointe piece in n.Fichiers)
+                    {
+                        if (!piece.EstIntegre) continue;
+                        ZipArchiveEntry entreePiece = archive.CreateEntry(EntreeFichier(piece));
+                        using (Stream fluxPiece = entreePiece.Open())
+                            fluxPiece.Write(piece.Donnees, 0, piece.Donnees.Length);
+                    }
                 }
             }
         }
@@ -326,6 +366,37 @@ namespace Mentalo.Persistance
                             n.ImageExtension = Path.GetExtension(nd.imageFichier);
                             n.ImageLargeur = nd.imageLargeur ?? 200;
                             n.ImageHauteur = nd.imageHauteur ?? 200;
+                        }
+                    }
+                    if (nd.fichiers != null)
+                    {
+                        foreach (FichierDto fd in nd.fichiers)
+                        {
+                            PieceJointe piece = new PieceJointe();
+                            if (!string.IsNullOrEmpty(fd.id)) piece.Id = fd.id;
+                            piece.Chemin = fd.chemin;
+                            piece.NomFichier = fd.nomFichier;
+                            if (string.IsNullOrEmpty(piece.NomFichier) && !string.IsNullOrEmpty(fd.chemin))
+                                piece.NomFichier = Path.GetFileName(fd.chemin);
+                            piece.Nom = string.IsNullOrEmpty(fd.nom) ? (piece.NomFichier ?? "Fichier") : fd.nom;
+                            if (!string.IsNullOrEmpty(fd.zip))
+                            {
+                                ZipArchiveEntry entreePiece = archive.GetEntry(fd.zip);
+                                if (entreePiece != null)
+                                {
+                                    using (Stream fluxPiece = entreePiece.Open())
+                                    using (MemoryStream memoire = new MemoryStream())
+                                    {
+                                        fluxPiece.CopyTo(memoire);
+                                        piece.Donnees = memoire.ToArray();
+                                    }
+                                }
+                            }
+                            // Un fichier ni intégré ni localisable reste un lien (signalé introuvable à l'écran).
+                            if (piece.Donnees == null && string.IsNullOrEmpty(piece.Chemin)
+                                && string.IsNullOrEmpty(piece.NomFichier))
+                                continue;
+                            n.Fichiers.Add(piece);
                         }
                     }
                     if (nd.riche != null && nd.riche.Count > 0)
