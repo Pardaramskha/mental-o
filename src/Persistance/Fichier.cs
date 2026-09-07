@@ -32,6 +32,14 @@ namespace Mentalo.Persistance
         public string boiteDefaut { get; set; }   // StyleBoite.Serialiser()
         public string lienDefaut { get; set; }    // couleur|epaisseur|trait|fleche|trace
         public string groupeDefaut { get; set; }  // couleur|trait|epaisseur
+        // v15+ : étiquettes définies dans le fichier
+        public List<EtiquetteDto> etiquettes { get; set; }
+    }
+
+    public class EtiquetteDto
+    {
+        public string nom { get; set; }
+        public string couleur { get; set; }
     }
 
     public class GroupeDto
@@ -49,6 +57,8 @@ namespace Mentalo.Persistance
         public string titreCouleur { get; set; }
         public string titreFond { get; set; }
         public double? titreTaille { get; set; }
+        // v15+
+        public bool? plie { get; set; }
     }
 
     public class NoeudDto
@@ -77,6 +87,9 @@ namespace Mentalo.Persistance
         public double? opacite { get; set; }
         // v14+ : fichiers attachés (liens) — les octets d'un fichier intégré sont dans le zip, sous zip
         public List<FichierDto> fichiers { get; set; }
+        // v15+ : note cachée et noms d'étiquettes
+        public string note { get; set; }
+        public List<string> etiquettes { get; set; }
     }
 
     public class FichierDto
@@ -125,7 +138,7 @@ namespace Mentalo.Persistance
         public const string Extension = ".tea";
         public const string FiltreOuverture = "Cartes Mental-o (*.tea;*.zeubi)|*.tea;*.zeubi|Tous les fichiers (*.*)|*.*";
         public const string FiltreEnregistrement = "Carte Mental-o (*.tea)|*.tea|Tous les fichiers (*.*)|*.*";
-        private const int VersionFormat = 14; // … v12 styles groupes + dates ; v13 tracés/étiquettes de liens + ombres/opacité ; v14 fichiers attachés
+        private const int VersionFormat = 15; // … v13 tracés/étiquettes de liens + ombres/opacité ; v14 fichiers attachés ; v15 notes, étiquettes, groupes pliés
 
         /// <summary>Le nom d'entrée d'un fichier intégré dans l'archive.</summary>
         private static string EntreeFichier(PieceJointe piece)
@@ -162,6 +175,12 @@ namespace Mentalo.Persistance
                 + document.LienTraitDefaut + "|" + document.LienFlecheDefaut + "|" + document.LienTraceDefaut;
             dto.groupeDefaut = document.GroupeCouleurDefaut + "|" + document.GroupeTraitDefaut + "|"
                 + document.GroupeEpaisseurDefaut.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (document.Etiquettes.Count > 0)
+            {
+                dto.etiquettes = new List<EtiquetteDto>();
+                foreach (Etiquette e in document.Etiquettes)
+                    dto.etiquettes.Add(new EtiquetteDto { nom = e.Nom, couleur = e.Couleur });
+            }
             foreach (Noeud n in document.Noeuds)
             {
                 NoeudDto nd = new NoeudDto();
@@ -184,6 +203,8 @@ namespace Mentalo.Persistance
                     nd.imageHauteur = n.ImageHauteur;
                 }
                 if (n.LargeurFixe > 0) nd.largeurFixe = n.LargeurFixe;
+                if (n.ANote) nd.note = n.Note;
+                if (n.Etiquettes.Count > 0) nd.etiquettes = new List<string>(n.Etiquettes);
                 if (n.Fichiers.Count > 0)
                 {
                     nd.fichiers = new List<FichierDto>();
@@ -218,6 +239,7 @@ namespace Mentalo.Persistance
                 if (!string.IsNullOrEmpty(g.TitreCouleur)) gd.titreCouleur = g.TitreCouleur;
                 if (!string.IsNullOrEmpty(g.TitreFond)) gd.titreFond = g.TitreFond;
                 gd.titreTaille = g.TitreTaille;
+                if (g.Plie) gd.plie = true;
                 dto.groupes.Add(gd);
             }
             foreach (Lien l in document.Liens)
@@ -335,6 +357,12 @@ namespace Mentalo.Persistance
                 foreach (string hexa in dto.couleursPerso)
                     document.AjouterCouleurPersonnalisee(hexa);
             }
+            if (dto != null && dto.etiquettes != null)
+            {
+                foreach (EtiquetteDto ed in dto.etiquettes)
+                    if (!string.IsNullOrWhiteSpace(ed.nom) && document.TrouverEtiquette(ed.nom) == null)
+                        document.Etiquettes.Add(new Etiquette(ed.nom, ed.couleur));
+            }
             if (dto != null && dto.noeuds != null)
             {
                 foreach (NoeudDto nd in dto.noeuds)
@@ -352,6 +380,10 @@ namespace Mentalo.Persistance
                     if (!string.IsNullOrEmpty(nd.ombre)) n.Ombre = nd.ombre;
                     if (nd.opacite.HasValue && nd.opacite.Value > 0) n.Opacite = nd.opacite.Value;
                     if (nd.largeurFixe.HasValue) n.LargeurFixe = nd.largeurFixe.Value;
+                    if (!string.IsNullOrEmpty(nd.note)) n.Note = nd.note;
+                    if (nd.etiquettes != null)
+                        foreach (string nom in nd.etiquettes)
+                            if (!string.IsNullOrWhiteSpace(nom) && !n.Etiquettes.Contains(nom)) n.Etiquettes.Add(nom);
                     if (!string.IsNullOrEmpty(nd.imageFichier))
                     {
                         ZipArchiveEntry entreeImage = archive.GetEntry(nd.imageFichier);
@@ -443,6 +475,7 @@ namespace Mentalo.Persistance
                     if (!string.IsNullOrEmpty(gd.titreCouleur)) g.TitreCouleur = gd.titreCouleur;
                     if (!string.IsNullOrEmpty(gd.titreFond)) g.TitreFond = gd.titreFond;
                     if (gd.titreTaille.HasValue) g.TitreTaille = gd.titreTaille.Value;
+                    g.Plie = gd.plie == true;
                     document.Groupes.Add(g);
                 }
             }

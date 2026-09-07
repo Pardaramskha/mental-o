@@ -603,6 +603,24 @@ namespace Mentalo.Persistance
             }
         }
 
+        /// <summary>Un texte multiligne « ressemble à un plan » quand la majorité de ses lignes
+        /// portent une puce, un numéro ou une indentation (dépôt de texte sur la toile, v0.15).</summary>
+        public static bool RessembleAUnPlan(string texte)
+        {
+            if (string.IsNullOrWhiteSpace(texte)) return false;
+            int lignes = 0, marquees = 0;
+            foreach (string brute in texte.Replace("\r", "").Split('\n'))
+            {
+                if (brute.Trim().Length == 0) continue;
+                lignes++;
+                string propre = brute.Trim();
+                if (brute.StartsWith(" ") || brute.StartsWith("\t") || RetirerMarqueur(propre) != propre
+                    || propre.StartsWith("#"))
+                    marquees++;
+            }
+            return lignes >= 2 && marquees * 2 >= lignes;
+        }
+
         private static string RetirerMarqueur(string ligne)
         {
             foreach (string marqueur in new string[] { "- ", "* ", "• ", "– ", "+ " })

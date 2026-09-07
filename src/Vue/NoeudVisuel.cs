@@ -49,7 +49,16 @@ namespace Mentalo.Vue
         private readonly StackPanel _affichageApres;
         // Les fichiers attachés : un lien par ligne, sous tout le reste (visible même en édition).
         private readonly StackPanel _fichiers;
+        // Étiquettes (v0.15) : rangée de puces colorées au-dessus du texte.
+        private readonly WrapPanel _etiquettes;
+        // Note cachée (v0.15) : petite icône en haut à droite, infobulle = la note.
+        private readonly FrameworkElement _iconeNote;
+        private bool _estompe;
         private readonly Image _image;
+
+        /// <summary>Fournit la couleur d'une étiquette par son nom (posé par la toile : les
+        /// définitions vivent dans le document).</summary>
+        public static Func<string, string> ResolveurCouleurEtiquette;
         private byte[] _imageDecodee; // dernières données décodées, pour ne pas re-décoder à chaque rafraîchissement
         private readonly RichTextBox _editeur;
         private bool _enEdition;
@@ -79,6 +88,12 @@ namespace Mentalo.Vue
         /// des actions (ouvrir, renommer, intégrer…) ancré sur l'élément fourni.</summary>
         public event Action<NoeudVisuel, PieceJointe, FrameworkElement> FichierClique;
 
+        /// <summary>Clic sur une case à cocher (v0.15) : (visuel, dans le texte après l'image ?, index de ligne).</summary>
+        public event Action<NoeudVisuel, bool, int> CaseCliquee;
+
+        /// <summary>Clic sur l'icône de note (v0.15) : la toile ouvre l'éditeur de note.</summary>
+        public event Action<NoeudVisuel> NoteCliquee;
+
         public bool EnEdition { get { return _enEdition; } }
 
         /// <summary>Cible des commandes Couper/Copier/Coller du menu contextuel d'édition.</summary>
@@ -106,11 +121,30 @@ namespace Mentalo.Vue
             _cadre.StrokeDashCap = PenLineCap.Round;
             Children.Add(_cadre);
 
+            _iconeNote = Icones.Creer("note", 12);
+            Shape formeNote = _iconeNote as Shape;
+            if (formeNote != null) formeNote.Fill = new SolidColorBrush(Color.FromRgb(0x8C, 0x87, 0x7E));
+            _iconeNote.HorizontalAlignment = HorizontalAlignment.Right;
+            _iconeNote.VerticalAlignment = VerticalAlignment.Top;
+            _iconeNote.Margin = new Thickness(0, 4, 5, 0);
+            _iconeNote.Cursor = Cursors.Hand;
+            _iconeNote.Visibility = Visibility.Collapsed;
+            ToolTipService.SetShowDuration(_iconeNote, 30000);
+            _iconeNote.MouseLeftButtonDown += delegate(object expediteur, MouseButtonEventArgs e)
+            {
+                e.Handled = true;
+                Action<NoeudVisuel> h = NoteCliquee;
+                if (h != null) h(this);
+            };
+            Children.Add(_iconeNote);
+
             _affichage = new StackPanel();
             _affichageApres = new StackPanel();
             _affichageApres.Visibility = Visibility.Collapsed;
             _fichiers = new StackPanel();
             _fichiers.Visibility = Visibility.Collapsed;
+            _etiquettes = new WrapPanel();
+            _etiquettes.Visibility = Visibility.Collapsed;
 
             _editeur = new RichTextBox();
             _editeur.FontFamily = new FontFamily("Segoe UI");
@@ -134,18 +168,19 @@ namespace Mentalo.Vue
             _image.Visibility = Visibility.Collapsed;
             RenderOptions.SetBitmapScalingMode(_image, BitmapScalingMode.HighQuality);
 
-            // Quatre rangées : texte avant, image, texte après, fichiers attachés. L'éditeur
-            // unique recouvre les trois premières ; les liens restent cliquables en édition.
-            _contenu.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            _contenu.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            _contenu.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            _contenu.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            Grid.SetRow(_affichage, 0);
-            Grid.SetRow(_image, 1);
-            Grid.SetRow(_affichageApres, 2);
-            Grid.SetRow(_fichiers, 3);
-            Grid.SetRow(_editeur, 0);
+            // Cinq rangées : étiquettes, texte avant, image, texte après, fichiers attachés.
+            // L'éditeur unique recouvre les trois rangées de texte/image ; étiquettes et
+            // liens restent visibles (et cliquables) en édition.
+            for (int i = 0; i < 5; i++)
+                _contenu.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            Grid.SetRow(_etiquettes, 0);
+            Grid.SetRow(_affichage, 1);
+            Grid.SetRow(_image, 2);
+            Grid.SetRow(_affichageApres, 3);
+            Grid.SetRow(_fichiers, 4);
+            Grid.SetRow(_editeur, 1);
             Grid.SetRowSpan(_editeur, 3);
+            _contenu.Children.Add(_etiquettes);
             _contenu.Children.Add(_affichage);
             _contenu.Children.Add(_image);
             _contenu.Children.Add(_affichageApres);
@@ -185,7 +220,9 @@ namespace Mentalo.Vue
                     Direction = 270
                 };
             // Opacité bornée : une boîte totalement invisible serait introuvable.
-            Opacity = Math.Max(0.15, Math.Min(1.0, Modele.Opacite > 0 ? Modele.Opacite : 1));
+            // Estompée (filtre d'étiquettes ou mise en avant), elle s'efface à 15 %.
+            double opacite = Math.Max(0.15, Math.Min(1.0, Modele.Opacite > 0 ? Modele.Opacite : 1));
+            Opacity = _estompe ? opacite * 0.15 : opacite;
 
             _fond.Fill = new SolidColorBrush(TexteRiche.CouleurDepuis(Modele.FondCouleur, Colors.White));
             _fond.RadiusX = Modele.Rayon;
@@ -205,6 +242,16 @@ namespace Mentalo.Vue
         {
             return Modele.BordureTrait == "aucune" ? 0 : Modele.BordureEpaisseur;
         }
+
+        /// <summary>Estompe (ou rétablit) la boîte : filtre par étiquettes, mise en avant.</summary>
+        public void DefinirEstompe(bool estompe)
+        {
+            if (_estompe == estompe) return;
+            _estompe = estompe;
+            MettreAJourStyle();
+        }
+
+        public bool Estompe { get { return _estompe; } }
 
         private static DoubleCollection TiretsBordure(string trait)
         {
@@ -264,13 +311,40 @@ namespace Mentalo.Vue
                     ? Visibility.Visible : Visibility.Collapsed;
             }
             _affichage.Children.Clear();
-            foreach (TextBlock bloc in TexteRiche.ConstruireBlocsLignes(Modele.Segments, Modele.Alignement))
+            foreach (TextBlock bloc in TexteRiche.ConstruireBlocsLignes(Modele.Segments, Modele.Alignement,
+                delegate(int ligne) { SignalerCase(false, ligne); }))
                 _affichage.Children.Add(bloc);
             _affichageApres.MaxWidth = _affichage.MaxWidth;
             _affichageApres.Margin = new Thickness(0, 4, 0, 0);
             _affichageApres.Children.Clear();
-            foreach (TextBlock bloc in TexteRiche.ConstruireBlocsLignes(Modele.SegmentsApres, Modele.Alignement))
+            foreach (TextBlock bloc in TexteRiche.ConstruireBlocsLignes(Modele.SegmentsApres, Modele.Alignement,
+                delegate(int ligne) { SignalerCase(true, ligne); }))
                 _affichageApres.Children.Add(bloc);
+
+            // Étiquettes : puces colorées, alignées comme le texte.
+            _etiquettes.Children.Clear();
+            _etiquettes.MaxWidth = _affichage.MaxWidth;
+            if (Modele.Etiquettes.Count > 0)
+            {
+                _etiquettes.HorizontalAlignment = alignement == TextAlignment.Center ? HorizontalAlignment.Center
+                    : alignement == TextAlignment.Right ? HorizontalAlignment.Right
+                    : HorizontalAlignment.Left;
+                _etiquettes.Margin = new Thickness(0, 0, 0, aTexte || image || Modele.Fichiers.Count > 0 ? 3 : 0);
+                foreach (string nom in Modele.Etiquettes)
+                    _etiquettes.Children.Add(ConstruirePuceEtiquette(nom));
+                _etiquettes.Visibility = Visibility.Visible;
+            }
+            else
+                _etiquettes.Visibility = Visibility.Collapsed;
+
+            // Note cachée : icône discrète, la note entière en infobulle.
+            if (Modele.ANote)
+            {
+                _iconeNote.ToolTip = Modele.Note.Length > 600 ? Modele.Note.Substring(0, 600) + "…" : Modele.Note;
+                _iconeNote.Visibility = Visibility.Visible;
+            }
+            else
+                _iconeNote.Visibility = Visibility.Collapsed;
 
             // Fichiers attachés : un lien par ligne, aligné comme le texte.
             _fichiers.Children.Clear();
@@ -285,6 +359,37 @@ namespace Mentalo.Vue
             }
             else
                 _fichiers.Visibility = Visibility.Collapsed;
+        }
+
+        private void SignalerCase(bool apres, int ligne)
+        {
+            Action<NoeudVisuel, bool, int> h = CaseCliquee;
+            if (h != null) h(this, apres, ligne);
+        }
+
+        /// <summary>Une puce d'étiquette : fond de la couleur de l'étiquette, nom en petit.</summary>
+        private static FrameworkElement ConstruirePuceEtiquette(string nom)
+        {
+            string hexa = ResolveurCouleurEtiquette != null ? ResolveurCouleurEtiquette(nom) : "#0078D7";
+            Color couleur = TexteRiche.CouleurDepuis(hexa, Color.FromRgb(0x00, 0x78, 0xD7));
+            // Texte blanc sur les couleurs sombres, encre sombre sur les claires.
+            double luminance = (0.299 * couleur.R + 0.587 * couleur.G + 0.114 * couleur.B) / 255.0;
+            return new Border
+            {
+                Background = new SolidColorBrush(couleur),
+                CornerRadius = new CornerRadius(7),
+                Padding = new Thickness(6, 0, 6, 1),
+                Margin = new Thickness(0, 0, 4, 2),
+                IsHitTestVisible = false,
+                Child = new TextBlock
+                {
+                    Text = nom,
+                    FontSize = 9.5,
+                    FontWeight = FontWeights.SemiBold,
+                    FontFamily = new FontFamily("Segoe UI"),
+                    Foreground = luminance > 0.62 ? new SolidColorBrush(Color.FromRgb(0x2A, 0x28, 0x24)) : Brushes.White
+                }
+            };
         }
 
         /// <summary>Une ligne « icône lien + libellé souligné » pour un fichier attaché.

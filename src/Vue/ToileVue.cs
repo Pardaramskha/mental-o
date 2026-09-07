@@ -406,6 +406,14 @@ namespace Mentalo.Vue
             foreach (Groupe groupe in groupesVides)
                 document.Groupes.Remove(groupe);
 
+            // Étiquettes : les puces lisent leur couleur dans le document ; groupes pliés masqués.
+            NoeudVisuel.ResolveurCouleurEtiquette = delegate(string nom) { return Document.CouleurEtiquette(nom); };
+            ReinitialiserEstompage();
+            foreach (Groupe groupe in document.Groupes)
+                if (groupe.Plie) AppliquerVisibilitePliage(groupe);
+            Action hEtiquettes = EtiquettesChange;
+            if (hEtiquettes != null) hEtiquettes();
+
             Historique.Vider();
             _echelle.ScaleX = 1;
             _echelle.ScaleY = 1;
@@ -610,6 +618,9 @@ namespace Mentalo.Vue
             visuel.FabriqueMenuContextuel = delegate { return ConstruireMenuFormatage(true); };
             visuel.SelectionEditeurChangee += SignalerFormatCible;
             visuel.FichierClique += OuvrirMenuFichier;
+            visuel.CaseCliquee += NoeudCaseCliquee;
+            visuel.NoteCliquee += NoeudNoteCliquee;
+            visuel.DefinirEstompe(!NoeudMisEnAvant(noeud));
             Canvas.SetLeft(visuel, noeud.X);
             Canvas.SetTop(visuel, noeud.Y);
             Canvas.SetZIndex(visuel, ++_zCompteur);
@@ -625,6 +636,7 @@ namespace Mentalo.Vue
             _canvas.Children.Add(visuel);
             _visuelsLiens[lien] = visuel;
             MettreAJourGeometrieLien(lien);
+            AppliquerEstompageLien(lien, visuel);
         }
 
         // ------------------------------------------------------------------ géométrie des liens
@@ -641,6 +653,17 @@ namespace Mentalo.Vue
             Noeud noeud = Document.TrouverNoeud(id);
             if (noeud != null)
             {
+                // Boîte d'un groupe plié : le lien se rabat sur la pastille du groupe.
+                Groupe plie = GroupePlieDe(id);
+                if (plie != null)
+                {
+                    Rect pastille = RectangleDuGroupe(plie);
+                    if (pastille != Rect.Empty)
+                    {
+                        rectangle = pastille;
+                        return true;
+                    }
+                }
                 rectangle = RectangleNoeud(noeud);
                 return true;
             }
@@ -672,6 +695,13 @@ namespace Mentalo.Vue
         {
             LienVisuel visuel;
             if (!_visuelsLiens.TryGetValue(lien, out visuel)) return;
+            // Un lien intérieur à un groupe plié (deux boîtes du groupe, ou une boîte et
+            // son propre cadre) n'a plus rien à relier : il se masque avec les boîtes.
+            Groupe plieSource = GroupePlieDe(lien.SourceId), plieCible = GroupePlieDe(lien.CibleId);
+            bool interne = (plieSource != null && (plieSource == plieCible || lien.CibleId == plieSource.Id))
+                || (plieCible != null && lien.SourceId == plieCible.Id);
+            visuel.Visibility = interne ? Visibility.Collapsed : Visibility.Visible;
+            if (interne) return;
             Rect rectSource, rectCible;
             if (!RectangleExtremite(lien.SourceId, out rectSource)
                 || !RectangleExtremite(lien.CibleId, out rectCible)) return;
@@ -842,7 +872,10 @@ namespace Mentalo.Vue
                 }
                 else
                 {
-                    CreerNoeudA(e.GetPosition(_canvas));
+                    // Double-clic sur une pastille de groupe plié : on le déplie.
+                    Groupe groupePlie = TrouverGroupe(e.OriginalSource);
+                    if (groupePlie != null && groupePlie.Plie) BasculerPliageGroupe(groupePlie);
+                    else CreerNoeudA(e.GetPosition(_canvas));
                 }
                 e.Handled = true;
                 return;
@@ -1195,17 +1228,20 @@ namespace Mentalo.Vue
                 Point p = e.GetPosition(_canvas);
                 Rect zone = new Rect(_rectangleDepart, p);
                 bool ajout = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
+                bool retrait = (Keyboard.Modifiers & ModifierKeys.Alt) != 0; // Alt : désélectionner ce qui est touché
                 if (zone.Width < 4 && zone.Height < 4)
                 {
-                    if (!ajout) Selectionner(null);
+                    if (!ajout && !retrait) Selectionner(null);
                     return;
                 }
                 List<NoeudVisuel> touches = new List<NoeudVisuel>();
-                if (ajout) touches.AddRange(_selectionnes);
+                if (ajout || retrait) touches.AddRange(_selectionnes);
                 foreach (KeyValuePair<Noeud, NoeudVisuel> kv in _visuels)
                 {
-                    if (zone.IntersectsWith(RectangleNoeud(kv.Key)) && !touches.Contains(kv.Value))
-                        touches.Add(kv.Value);
+                    if (kv.Value.Visibility != Visibility.Visible) continue; // boîtes d'un groupe plié
+                    if (!zone.IntersectsWith(RectangleNoeud(kv.Key))) continue;
+                    if (retrait) touches.Remove(kv.Value);
+                    else if (!touches.Contains(kv.Value)) touches.Add(kv.Value);
                 }
                 SelectionnerEnsemble(touches, touches.Count > 0 ? touches[0] : null);
             }
@@ -1842,6 +1878,8 @@ namespace Mentalo.Vue
             // Identifiants neufs : deux liens ne partagent pas la même entrée du .tea.
             foreach (PieceJointe piece in source.Fichiers)
                 copie.Fichiers.Add(piece.ClonerNouvelId());
+            copie.Note = source.Note;
+            copie.Etiquettes = new List<string>(source.Etiquettes);
             StyleBoite.Depuis(source).AppliquerA(copie);
             return copie;
         }
@@ -2093,7 +2131,21 @@ namespace Mentalo.Vue
             if (string.IsNullOrWhiteSpace(texte)) return resultats;
             string bas = texte.Trim().ToLower();
             foreach (Noeud n in Document.Noeuds)
-                if (n.TextePlat.ToLower().Contains(bas)) resultats.Add(n);
+            {
+                // Le texte, la note cachée, les étiquettes et les libellés de liens comptent.
+                if (n.TextePlat.ToLower().Contains(bas) || (n.Note ?? "").ToLower().Contains(bas))
+                {
+                    resultats.Add(n);
+                    continue;
+                }
+                bool trouve = false;
+                foreach (string etiquette in n.Etiquettes)
+                    if (etiquette.ToLower().Contains(bas)) { trouve = true; break; }
+                if (!trouve)
+                    foreach (PieceJointe piece in n.Fichiers)
+                        if ((piece.Nom ?? "").ToLower().Contains(bas)) { trouve = true; break; }
+                if (trouve) resultats.Add(n);
+            }
             return resultats;
         }
 
@@ -2101,6 +2153,7 @@ namespace Mentalo.Vue
         {
             NoeudVisuel visuel;
             if (!_visuels.TryGetValue(noeud, out visuel)) return;
+            DeplierPour(noeud);
             Selectionner(visuel);
             CentrerSur(Centre(RectangleNoeud(noeud)));
         }
@@ -2119,6 +2172,7 @@ namespace Mentalo.Vue
                 double meilleure = double.MaxValue;
                 foreach (Noeud n in Document.Noeuds)
                 {
+                    if (NoeudMasque(n)) continue;
                     double distance = (Centre(RectangleNoeud(n)) - centreVue).Length;
                     if (distance < meilleure) { meilleure = distance; plusProche = n; }
                 }
@@ -2130,7 +2184,7 @@ namespace Mentalo.Vue
             double meilleurScore = double.MaxValue;
             foreach (Noeud n in Document.Noeuds)
             {
-                if (n == _selection.Modele) continue;
+                if (n == _selection.Modele || NoeudMasque(n)) continue;
                 Vector v = Centre(RectangleNoeud(n)) - origine;
                 double avant = v.X * dx + v.Y * dy;
                 if (avant <= 1) continue; // pas dans la direction demandée
@@ -2145,6 +2199,7 @@ namespace Mentalo.Vue
         {
             NoeudVisuel visuel;
             if (!_visuels.TryGetValue(noeud, out visuel)) return;
+            DeplierPour(noeud);
             Selectionner(visuel);
             // Recentrer seulement si la boîte sort de la vue.
             Rect vue = new Rect(-_translation.X / _echelle.ScaleX, -_translation.Y / _echelle.ScaleY,
@@ -2210,6 +2265,9 @@ namespace Mentalo.Vue
         {
             foreach (KeyValuePair<Groupe, Rectangle> kv in _visuelsGroupes)
                 if (ReferenceEquals(kv.Value, origine)) return kv.Key;
+            // Le titre (ou la pastille d'un groupe plié) vaut le cadre.
+            foreach (KeyValuePair<Groupe, TextBlock> kv in _titresGroupes)
+                if (ReferenceEquals(kv.Value, origine)) return kv.Key;
             return null;
         }
 
@@ -2253,6 +2311,12 @@ namespace Mentalo.Vue
                 cadre.StrokeDashCap = PenLineCap.Round;
                 double epaisseur = groupe.BordureEpaisseur > 0 ? groupe.BordureEpaisseur : 1.5;
                 cadre.StrokeThickness = groupe == _groupeActif ? epaisseur + 1 : epaisseur;
+                if (groupe.Plie)
+                {
+                    // Pastille pleine et nette : c'est un objet, plus un cadre.
+                    cadre.Fill = new SolidColorBrush(Color.FromArgb(0x3A, couleur.R, couleur.G, couleur.B));
+                    cadre.StrokeDashArray = null;
+                }
             }
             TextBlock titre;
             if (_titresGroupes.TryGetValue(groupe, out titre))
@@ -2261,9 +2325,13 @@ namespace Mentalo.Vue
                     ? couleur : TexteRiche.CouleurDepuis(groupe.TitreCouleur, couleur);
                 titre.Foreground = new SolidColorBrush(couleurTitre);
                 Color fondCanevas = CouleurFondEffective();
-                titre.Background = new SolidColorBrush(string.IsNullOrEmpty(groupe.TitreFond)
-                    ? fondCanevas : TexteRiche.CouleurDepuis(groupe.TitreFond, fondCanevas));
+                titre.Background = groupe.Plie ? Brushes.Transparent
+                    : new SolidColorBrush(string.IsNullOrEmpty(groupe.TitreFond)
+                        ? fondCanevas : TexteRiche.CouleurDepuis(groupe.TitreFond, fondCanevas));
                 titre.FontSize = groupe.TitreTaille > 0 ? groupe.TitreTaille : 12.5;
+                titre.FontWeight = groupe.Plie ? FontWeights.Bold : FontWeights.SemiBold;
+                titre.Cursor = groupe.Plie ? Cursors.Hand : null;
+                titre.ToolTip = groupe.Plie ? "Groupe plié — double-clic pour le déplier" : null;
             }
         }
 
@@ -2291,21 +2359,52 @@ namespace Mentalo.Vue
                 return;
             }
             cadre.Visibility = Visibility.Visible;
+            TextBlock titre;
+            _titresGroupes.TryGetValue(groupe, out titre);
+
+            if (groupe.Plie)
+            {
+                // Pastille-titre : « ▸ Titre · n », ancrée en haut à gauche de l'emprise des boîtes.
+                if (titre != null)
+                {
+                    titre.Text = TextePastille(groupe);
+                    titre.Visibility = Visibility.Visible;
+                    titre.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                }
+                Rect pastille = RectanglePastille(groupe, titre == null ? 60 : titre.DesiredSize.Width);
+                Canvas.SetLeft(cadre, pastille.X);
+                Canvas.SetTop(cadre, pastille.Y);
+                cadre.Width = pastille.Width;
+                cadre.Height = pastille.Height;
+                if (titre != null)
+                {
+                    Canvas.SetLeft(titre, pastille.X + 12);
+                    Canvas.SetTop(titre, pastille.Y + (pastille.Height - titre.DesiredSize.Height) / 2);
+                }
+                if (_groupeActif == groupe) MettreAJourGrip();
+                MettreAJourLiensDeId(groupe.Id);
+                return;
+            }
+
             Canvas.SetLeft(cadre, minX - MargeGroupe);
             Canvas.SetTop(cadre, minY - MargeGroupe);
             cadre.Width = Math.Max(maxX - minX + MargeGroupe * 2, groupe.LargeurFixe);
             cadre.Height = Math.Max(maxY - minY + MargeGroupe * 2, groupe.HauteurFixe);
 
-            TextBlock titre;
-            if (_titresGroupes.TryGetValue(groupe, out titre))
+            if (titre != null)
             {
-                if (string.IsNullOrWhiteSpace(groupe.Titre))
+                // Le titre porte l'avancement des cases à cocher de ses boîtes (« Titre · 3/5 »).
+                string progression = ProgressionGroupe(groupe);
+                string texteTitre = (groupe.Titre ?? "").Trim();
+                if (progression.Length > 0)
+                    texteTitre = texteTitre.Length == 0 ? progression : texteTitre + " · " + progression;
+                if (texteTitre.Length == 0)
                 {
                     titre.Visibility = Visibility.Collapsed;
                 }
                 else
                 {
-                    titre.Text = groupe.Titre;
+                    titre.Text = texteTitre;
                     titre.Visibility = Visibility.Visible;
                     titre.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
                     bool enBas = groupe.TitrePosition != null && groupe.TitrePosition.StartsWith("bas");
@@ -2361,11 +2460,19 @@ namespace Mentalo.Vue
         {
             Document.Groupes.Add(groupe);
             CreerVisuelGroupe(groupe);
+            if (groupe.Plie) AppliquerVisibilitePliage(groupe);
             SignalerModification();
         }
 
         public void RetirerGroupe(Groupe groupe)
         {
+            // Un groupe plié qui disparaît rend ses boîtes visibles.
+            if (groupe.Plie)
+            {
+                groupe.Plie = false;
+                AppliquerVisibilitePliage(groupe);
+                groupe.Plie = true; // l'annulation (re-création) le retrouvera plié
+            }
             Rectangle cadre;
             if (_visuelsGroupes.TryGetValue(groupe, out cadre))
             {
@@ -2391,6 +2498,7 @@ namespace Mentalo.Vue
         {
             foreach (string id in ids)
                 groupe.NoeudIds.Remove(id);
+            if (groupe.Plie) RecalerVisibiliteMembres(groupe, ids);
             MettreAJourCadreGroupe(groupe);
             SignalerModification();
         }
@@ -2399,6 +2507,7 @@ namespace Mentalo.Vue
         {
             foreach (string id in ids)
                 if (!groupe.NoeudIds.Contains(id)) groupe.NoeudIds.Add(id);
+            if (groupe.Plie) RecalerVisibiliteMembres(groupe, ids);
             MettreAJourCadreGroupe(groupe);
             SignalerModification();
         }
@@ -2898,6 +3007,15 @@ namespace Mentalo.Vue
             };
             menu.Items.Add(reajuster);
 
+            MenuItem plier = new MenuItem
+            {
+                Header = groupe.Plie ? "Déplier le groupe" : "Plier le groupe",
+                ToolTip = "Plié, le groupe se réduit à une pastille-titre ; ses boîtes et leurs liens intérieurs se cachent"
+            };
+            plier.Click += delegate { BasculerPliageGroupe(groupe); };
+            menu.Items.Add(plier);
+            menu.Items.Add(ConstruireMenuEtiquettes());
+
             menu.Items.Add(new Separator());
             MenuItem degrouper = new MenuItem { Header = "Dégrouper", InputGestureText = "Ctrl+Maj+G" };
             degrouper.Click += delegate
@@ -3048,9 +3166,18 @@ namespace Mentalo.Vue
 
         private void DeposerFichiers(object expediteur, DragEventArgs e)
         {
-            if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
-            string[] fichiers = (string[])e.Data.GetData(DataFormats.FileDrop);
             Point position = e.GetPosition(_canvas);
+            if (!e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                // Texte ou adresse glissés depuis un navigateur ou un éditeur.
+                if (_mode == "lecture") return;
+                string texte = null;
+                if (e.Data.GetDataPresent(DataFormats.UnicodeText)) texte = e.Data.GetData(DataFormats.UnicodeText) as string;
+                else if (e.Data.GetDataPresent(DataFormats.Text)) texte = e.Data.GetData(DataFormats.Text) as string;
+                if (texte != null) DeposerTexte(texte, NoeudSousPoint(position), position);
+                return;
+            }
+            string[] fichiers = (string[])e.Data.GetData(DataFormats.FileDrop);
             // Déposés sur une boîte : la première image s'y attache (une seule par boîte),
             // les autres fichiers s'y lient tous ; le reste devient des boîtes.
             NoeudVisuel noeudCible = NoeudSousPoint(position);
@@ -3128,9 +3255,14 @@ namespace Mentalo.Vue
                 _grip.Visibility = Visibility.Collapsed;
                 return;
             }
-            // Groupe entièrement sélectionné : la poignée redimensionne son cadre.
+            // Groupe entièrement sélectionné : la poignée redimensionne son cadre (pas une pastille).
             if (_groupeActif != null)
             {
+                if (_groupeActif.Plie)
+                {
+                    _grip.Visibility = Visibility.Collapsed;
+                    return;
+                }
                 Rectangle cadre;
                 if (_visuelsGroupes.TryGetValue(_groupeActif, out cadre) && cadre.Visibility == Visibility.Visible)
                 {
@@ -3592,6 +3724,20 @@ namespace Mentalo.Vue
                 };
                 insererFichierBoite.Click += delegate { InsererFichierDansBoite(); };
                 menu.Items.Add(insererFichierBoite);
+                MenuItem insererLienWeb = new MenuItem { Header = "Insérer un lien web…" };
+                insererLienWeb.Click += delegate { InsererLienWeb(); };
+                menu.Items.Add(insererLienWeb);
+                if (_selection != null)
+                {
+                    MenuItem note = new MenuItem
+                    {
+                        Header = _selection.Modele.ANote ? "Modifier la note…" : "Ajouter une note…",
+                        ToolTip = "Un détail hors de la carte : une icône dans le coin, la note en infobulle"
+                    };
+                    note.Click += delegate { EditerNoteSelection(); };
+                    menu.Items.Add(note);
+                    menu.Items.Add(ConstruireMenuEtiquettes());
+                }
                 if (_selection != null && _selection.Modele.EstImage)
                 {
                     MenuItem retirerImage = new MenuItem { Header = "Retirer l'image" };

@@ -91,6 +91,13 @@ namespace Mentalo.Vue
         /// renvoie null si le dialogue est annulé. Ctrl+Entrée valide.</summary>
         public static string DemanderTexteMultiligne(Window proprietaire, string titre, string invite)
         {
+            return DemanderTexteMultiligne(proprietaire, titre, invite, "", "Importer");
+        }
+
+        /// <summary>Variante avec texte initial et libellé du bouton (note d'une boîte, v0.15).</summary>
+        public static string DemanderTexteMultiligne(Window proprietaire, string titre, string invite,
+            string valeurInitiale, string libelleBouton)
+        {
             Window dialogue = new Window();
             dialogue.Title = titre;
             dialogue.Owner = proprietaire;
@@ -108,10 +115,11 @@ namespace Mentalo.Vue
                 Height = 260,
                 AcceptsReturn = true,
                 AcceptsTab = true,
-                TextWrapping = TextWrapping.NoWrap,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-                FontFamily = new System.Windows.Media.FontFamily("Consolas")
+                FontFamily = new System.Windows.Media.FontFamily(libelleBouton == "Importer" ? "Consolas" : "Segoe UI"),
+                TextWrapping = libelleBouton == "Importer" ? TextWrapping.NoWrap : TextWrapping.Wrap,
+                Text = valeurInitiale ?? ""
             };
             panneau.Children.Add(saisie);
 
@@ -121,7 +129,7 @@ namespace Mentalo.Vue
                 HorizontalAlignment = HorizontalAlignment.Right,
                 Margin = new Thickness(0, 12, 0, 0)
             };
-            Button valider = new Button { Content = "Importer", Width = 90, Margin = new Thickness(0, 0, 6, 0) };
+            Button valider = new Button { Content = libelleBouton, MinWidth = 90, Margin = new Thickness(0, 0, 6, 0) };
             Button annuler = new Button { Content = "Annuler", Width = 80, IsCancel = true };
             valider.Click += delegate { dialogue.DialogResult = true; };
             boutons.Children.Add(valider);

@@ -4,3 +4,6 @@ Mental-o.exe
 
 # Cartes de test locales
 *.zeubi
+
+# Notes personnelles de Rémi (hors dépôt)
+FEATURES.md

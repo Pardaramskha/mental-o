@@ -27,6 +27,10 @@ namespace Mentalo.Modele
         public string TitreFond { get; set; }        // "" = fond du tableau
         public double TitreTaille { get; set; }
 
+        /// <summary>Groupe plié (v0.15) : ses boîtes sont masquées, le cadre se réduit à une
+        /// pastille-titre qui reçoit les liens venant de l'extérieur.</summary>
+        public bool Plie { get; set; }
+
         public Groupe()
         {
             Id = Guid.NewGuid().ToString("N");

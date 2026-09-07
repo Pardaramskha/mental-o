@@ -101,7 +101,17 @@ namespace Mentalo.Vue
         public static List<System.Windows.Controls.TextBlock> ConstruireBlocsLignes(
             List<Segment> segments, string alignementDefaut)
         {
+            return ConstruireBlocsLignes(segments, alignementDefaut, null);
+        }
+
+        /// <summary>Variante avec cases à cocher cliquables (v0.15) : quand une ligne commence
+        /// par ☐/☑, le marqueur devient un Run à part, curseur main, qui appelle
+        /// « surCase(indexLigne) » au clic gauche (le clic n'atteint pas la toile).</summary>
+        public static List<System.Windows.Controls.TextBlock> ConstruireBlocsLignes(
+            List<Segment> segments, string alignementDefaut, Action<int> surCase)
+        {
             List<System.Windows.Controls.TextBlock> blocs = new List<System.Windows.Controls.TextBlock>();
+            int index = 0;
             foreach (List<Segment> ligne in PucesTexte.DecouperLignes(segments))
             {
                 System.Windows.Controls.TextBlock bloc = new System.Windows.Controls.TextBlock();
@@ -115,14 +125,39 @@ namespace Mentalo.Vue
                 }
                 else
                 {
+                    bool premier = true;
                     foreach (Segment s in ligne)
                     {
+                        if (premier && surCase != null && PucesTexte.EstCase(s.Texte))
+                        {
+                            int indexCapture = index;
+                            Run marqueur = new Run(s.Texte.Substring(0, 2));
+                            AppliquerAuRun(marqueur, s);
+                            marqueur.Cursor = System.Windows.Input.Cursors.Hand;
+                            marqueur.ToolTip = s.Texte.StartsWith(PucesTexte.CaseCochee) ? "Décocher" : "Cocher";
+                            marqueur.MouseLeftButtonDown += delegate(object expediteur, System.Windows.Input.MouseButtonEventArgs e)
+                            {
+                                e.Handled = true;
+                                surCase(indexCapture);
+                            };
+                            bloc.Inlines.Add(marqueur);
+                            if (s.Texte.Length > 2)
+                            {
+                                Run reste = new Run(s.Texte.Substring(2));
+                                AppliquerAuRun(reste, s);
+                                bloc.Inlines.Add(reste);
+                            }
+                            premier = false;
+                            continue;
+                        }
+                        premier = false;
                         Run run = new Run(s.Texte);
                         AppliquerAuRun(run, s);
                         bloc.Inlines.Add(run);
                     }
                 }
                 blocs.Add(bloc);
+                index++;
             }
             return blocs;
         }

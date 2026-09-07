@@ -179,6 +179,80 @@ namespace Mentalo.Historique
         public void Annuler() { _toile.DefinirFichiersNoeud(_noeud, _anciens); }
     }
 
+    /// <summary>La note cachée d'une boîte (v0.15).</summary>
+    public class CommandeModifierNote : ICommande
+    {
+        private readonly ToileVue _toile;
+        private readonly Noeud _noeud;
+        private readonly string _ancienne, _nouvelle;
+
+        public CommandeModifierNote(ToileVue toile, Noeud noeud, string nouvelle)
+        {
+            _toile = toile;
+            _noeud = noeud;
+            _ancienne = noeud.Note ?? "";
+            _nouvelle = nouvelle ?? "";
+        }
+
+        public void Executer() { _toile.DefinirNoteNoeud(_noeud, _nouvelle); }
+        public void Annuler() { _toile.DefinirNoteNoeud(_noeud, _ancienne); }
+    }
+
+    /// <summary>Les étiquettes portées par une boîte (v0.15) : liste entière remplacée.</summary>
+    public class CommandeModifierEtiquettes : ICommande
+    {
+        private readonly ToileVue _toile;
+        private readonly Noeud _noeud;
+        private readonly List<string> _anciennes, _nouvelles;
+
+        public CommandeModifierEtiquettes(ToileVue toile, Noeud noeud, List<string> nouvelles)
+        {
+            _toile = toile;
+            _noeud = noeud;
+            _anciennes = new List<string>(noeud.Etiquettes);
+            _nouvelles = nouvelles;
+        }
+
+        public void Executer() { _toile.DefinirEtiquettesNoeud(_noeud, _nouvelles); }
+        public void Annuler() { _toile.DefinirEtiquettesNoeud(_noeud, _anciennes); }
+    }
+
+    /// <summary>Les définitions d'étiquettes du document (création, renommage, couleur,
+    /// suppression) — avec, en cas de renommage/suppression, la retouche des boîtes.</summary>
+    public class CommandeModifierDefinitionsEtiquettes : ICommande
+    {
+        private readonly ToileVue _toile;
+        private readonly List<Etiquette> _anciennes, _nouvelles;
+        private readonly Dictionary<Noeud, List<string>> _anciensPorteurs = new Dictionary<Noeud, List<string>>();
+        private readonly Dictionary<Noeud, List<string>> _nouveauxPorteurs;
+
+        public CommandeModifierDefinitionsEtiquettes(ToileVue toile, List<Etiquette> nouvelles,
+            Dictionary<Noeud, List<string>> nouveauxPorteurs)
+        {
+            _toile = toile;
+            _anciennes = new List<Etiquette>();
+            foreach (Etiquette e in toile.Document.Etiquettes) _anciennes.Add(e.Cloner());
+            _nouvelles = nouvelles;
+            _nouveauxPorteurs = nouveauxPorteurs ?? new Dictionary<Noeud, List<string>>();
+            foreach (KeyValuePair<Noeud, List<string>> kv in _nouveauxPorteurs)
+                _anciensPorteurs[kv.Key] = new List<string>(kv.Key.Etiquettes);
+        }
+
+        public void Executer()
+        {
+            _toile.DefinirDefinitionsEtiquettes(_nouvelles);
+            foreach (KeyValuePair<Noeud, List<string>> kv in _nouveauxPorteurs)
+                _toile.DefinirEtiquettesNoeud(kv.Key, kv.Value);
+        }
+
+        public void Annuler()
+        {
+            _toile.DefinirDefinitionsEtiquettes(_anciennes);
+            foreach (KeyValuePair<Noeud, List<string>> kv in _anciensPorteurs)
+                _toile.DefinirEtiquettesNoeud(kv.Key, kv.Value);
+        }
+    }
+
     public class CommandeRedimensionnerImage : ICommande
     {
         private readonly ToileVue _toile;

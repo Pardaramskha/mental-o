@@ -86,6 +86,24 @@ namespace Mentalo.Historique
         }
     }
 
+    /// <summary>Plier / déplier un groupe (v0.15).</summary>
+    public class CommandePlierGroupe : ICommande
+    {
+        private readonly ToileVue _toile;
+        private readonly Groupe _groupe;
+        private readonly bool _plie;
+
+        public CommandePlierGroupe(ToileVue toile, Groupe groupe, bool plie)
+        {
+            _toile = toile;
+            _groupe = groupe;
+            _plie = plie;
+        }
+
+        public void Executer() { _toile.DefinirPliageGroupe(_groupe, _plie); }
+        public void Annuler() { _toile.DefinirPliageGroupe(_groupe, !_plie); }
+    }
+
     public class CommandeRedimensionnerGroupe : ICommande
     {
         private readonly ToileVue _toile;

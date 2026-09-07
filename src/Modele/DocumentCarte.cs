@@ -13,6 +13,29 @@ namespace Mentalo.Modele
         /// <summary>Le répertoire des couleurs personnalisées de CE fichier (hexa "#RRGGBB").</summary>
         public List<string> CouleursPersonnalisees { get; private set; }
 
+        /// <summary>Les étiquettes définies dans CE fichier (v0.15) : nom + couleur.</summary>
+        public List<Etiquette> Etiquettes { get; set; }
+
+        public Etiquette TrouverEtiquette(string nom)
+        {
+            foreach (Etiquette e in Etiquettes)
+                if (string.Equals(e.Nom, nom, StringComparison.OrdinalIgnoreCase)) return e;
+            return null;
+        }
+
+        /// <summary>La couleur d'une étiquette par son nom (accent bleu si elle n'est plus définie).</summary>
+        public string CouleurEtiquette(string nom)
+        {
+            Etiquette e = TrouverEtiquette(nom);
+            return e == null ? "#0078D7" : e.Couleur;
+        }
+
+        /// <summary>La prochaine couleur de la palette, en boucle sur celles déjà prises.</summary>
+        public string ProchaineCouleurEtiquette()
+        {
+            return Etiquette.Palette[Etiquettes.Count % Etiquette.Palette.Length];
+        }
+
         // Préférences du fichier (Fichier > Préférences de fichier)
         public double PaddingBoites { get; set; }
         public string PoliceParDefaut { get; set; }
@@ -68,6 +91,7 @@ namespace Mentalo.Modele
             Liens = new List<Lien>();
             Groupes = new List<Groupe>();
             CouleursPersonnalisees = new List<string>();
+            Etiquettes = new List<Etiquette>();
             PaddingBoites = 9;
             PoliceParDefaut = "Segoe UI";
             TailleParDefaut = 14;

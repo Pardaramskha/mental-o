@@ -28,6 +28,14 @@ namespace Mentalo.Modele
         /// <summary>Les fichiers attachés (v0.14), affichés en liens sous le texte.</summary>
         public List<PieceJointe> Fichiers { get; set; }
 
+        /// <summary>Note cachée (v0.15) : détail hors carte, montré en infobulle ("" = aucune).</summary>
+        public string Note { get; set; }
+
+        /// <summary>Noms des étiquettes portées (v0.15) ; les couleurs vivent dans DocumentCarte.Etiquettes.</summary>
+        public List<string> Etiquettes { get; set; }
+
+        public bool ANote { get { return !string.IsNullOrWhiteSpace(Note); } }
+
         /// <summary>Une boîte sans texte, sans image et sans fichier n'a pas de raison d'exister.</summary>
         public bool EstVide
         {
@@ -49,6 +57,8 @@ namespace Mentalo.Modele
             Segments = new List<Segment>();
             SegmentsApres = new List<Segment>();
             Fichiers = new List<PieceJointe>();
+            Note = "";
+            Etiquettes = new List<string>();
             Alignement = "gauche";
             FondCouleur = "#FFFFFF";
             BordureCouleur = "#B8B2A7";

@@ -29,10 +29,48 @@ namespace Mentalo.Modele
 
         public bool EstIntegre { get { return Donnees != null; } }
 
+        /// <summary>Un hyperlien web (v0.15) : Chemin porte l'adresse, rien n'est intégrable.</summary>
+        public bool EstUrl { get { return EstAdresseWeb(Chemin); } }
+
+        public static bool EstAdresseWeb(string texte)
+        {
+            if (string.IsNullOrEmpty(texte)) return false;
+            string bas = texte.Trim().ToLowerInvariant();
+            return bas.StartsWith("http://") || bas.StartsWith("https://")
+                || bas.StartsWith("mailto:") || bas.StartsWith("ftp://") || bas.StartsWith("www.");
+        }
+
+        /// <summary>Fabrique un hyperlien ; « www. » sans schéma reçoit https://.</summary>
+        public static PieceJointe DepuisUrl(string url, string nom)
+        {
+            PieceJointe piece = new PieceJointe();
+            string adresse = (url ?? "").Trim();
+            if (adresse.ToLowerInvariant().StartsWith("www.")) adresse = "https://" + adresse;
+            piece.Chemin = adresse;
+            piece.NomFichier = "";
+            piece.Nom = string.IsNullOrWhiteSpace(nom) ? LibelleDepuisUrl(adresse) : nom.Trim();
+            return piece;
+        }
+
+        /// <summary>Un libellé lisible tiré de l'adresse : l'hôte sans « www. », plus le chemin s'il est court.</summary>
+        public static string LibelleDepuisUrl(string adresse)
+        {
+            try
+            {
+                Uri uri = new Uri(adresse);
+                string hote = uri.Host.StartsWith("www.") ? uri.Host.Substring(4) : uri.Host;
+                string chemin = uri.AbsolutePath == "/" ? "" : uri.AbsolutePath.TrimEnd('/');
+                if (uri.Scheme == "mailto") return uri.AbsoluteUri.Substring(7);
+                return chemin.Length > 0 && chemin.Length <= 40 ? hote + chemin : hote;
+            }
+            catch { return adresse; }
+        }
+
         public string Extension
         {
             get
             {
+                if (EstUrl) return "";
                 string source = !string.IsNullOrEmpty(NomFichier) ? NomFichier : Chemin;
                 if (string.IsNullOrEmpty(source)) return "";
                 try { return Path.GetExtension(source).ToLowerInvariant(); }
@@ -46,6 +84,7 @@ namespace Mentalo.Modele
             get
             {
                 if (string.IsNullOrEmpty(Chemin)) return false;
+                if (EstUrl) return true; // on ne sonde pas le réseau : l'adresse vaut disponibilité
                 try { return File.Exists(Chemin); }
                 catch { return false; }
             }
@@ -93,6 +132,7 @@ namespace Mentalo.Modele
         public string TailleLisible()
         {
             long octets = -1;
+            if (EstUrl) return "";
             if (Donnees != null) octets = Donnees.LongLength;
             else if (OrigineDisponible)
             {

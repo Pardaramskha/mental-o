@@ -28,6 +28,7 @@ namespace Mentalo.Parametres
         public bool miniCarteVisible { get; set; }
         public bool inspecteurVisible { get; set; }
         public bool historiqueVisible { get; set; }
+        public bool filtreVisible { get; set; }
         public bool listesAutomatiques { get; set; }
         public string taillePoignees { get; set; }
         public string vitesseZoom { get; set; }
@@ -63,6 +64,13 @@ namespace Mentalo.Parametres
             new DefinitionAction("empiler", "Édition", "Empiler la sélection", null),
             new DefinitionAction("inserer-image", "Insertion", "Insérer une image", "Ctrl+Shift+I"),
             new DefinitionAction("inserer-fichier", "Insertion", "Insérer un fichier", "Ctrl+Shift+F"),
+            new DefinitionAction("inserer-lien-web", "Insertion", "Insérer un lien web", "Ctrl+Shift+L"),
+            new DefinitionAction("tout-selectionner", "Édition", "Tout sélectionner", "Ctrl+A"),
+            new DefinitionAction("note", "Édition", "Note de la boîte", "Ctrl+Shift+N"),
+            new DefinitionAction("plier", "Édition", "Plier / déplier le groupe", "Ctrl+Shift+P"),
+            new DefinitionAction("zoom-tout", "Affichage", "Tout voir", "Ctrl+Shift+D0"),
+            new DefinitionAction("zoom-selection", "Affichage", "Zoom sur la sélection", "Ctrl+Shift+D1"),
+            new DefinitionAction("focus", "Affichage", "Mettre en avant la sélection", "Ctrl+Shift+M"),
             new DefinitionAction("zoom-avant", "Affichage", "Zoom avant", "Ctrl+Add"),
             new DefinitionAction("zoom-arriere", "Affichage", "Zoom arrière", "Ctrl+Subtract"),
             new DefinitionAction("zoom-100", "Affichage", "Zoom 100 %", "Ctrl+D0"),
@@ -84,6 +92,7 @@ namespace Mentalo.Parametres
         public static bool MiniCarteVisible;
         public static bool InspecteurVisible;
         public static bool HistoriqueVisible;
+        public static bool FiltreVisible; // panneau « Filtre par étiquettes » (v0.15)
         public static bool ListesAutomatiques; // « * »/« - » + espace → puce (désactivé par défaut)
         public static string TaillePoignees = "normale"; // "petite" | "normale" | "grande"
         public static string VitesseZoom = "normale";    // "lente" | "normale" | "rapide"
@@ -155,6 +164,7 @@ namespace Mentalo.Parametres
                 MiniCarteVisible = dto.miniCarteVisible;
                 InspecteurVisible = dto.inspecteurVisible;
                 HistoriqueVisible = dto.historiqueVisible;
+                FiltreVisible = dto.filtreVisible;
                 ListesAutomatiques = dto.listesAutomatiques;
                 if (!string.IsNullOrEmpty(dto.taillePoignees)) TaillePoignees = dto.taillePoignees;
                 if (!string.IsNullOrEmpty(dto.vitesseZoom)) VitesseZoom = dto.vitesseZoom;
@@ -178,6 +188,7 @@ namespace Mentalo.Parametres
                 dto.miniCarteVisible = MiniCarteVisible;
                 dto.inspecteurVisible = InspecteurVisible;
                 dto.historiqueVisible = HistoriqueVisible;
+                dto.filtreVisible = FiltreVisible;
                 dto.listesAutomatiques = ListesAutomatiques;
                 dto.taillePoignees = TaillePoignees;
                 dto.vitesseZoom = VitesseZoom;

@@ -153,6 +153,11 @@ namespace Mentalo.Vue
         /// <summary>Clic gauche ou droit sur un lien : toutes les actions au même endroit.</summary>
         private void OuvrirMenuFichier(NoeudVisuel visuel, PieceJointe piece, FrameworkElement ancre)
         {
+            if (piece.EstUrl)
+            {
+                OuvrirMenuUrl(visuel, piece, ancre);
+                return;
+            }
             Noeud noeud = visuel.Modele;
             if (!_selectionnes.Contains(visuel)) Selectionner(visuel);
 
@@ -256,7 +261,9 @@ namespace Mentalo.Vue
             try
             {
                 string chemin;
-                if (piece.EstIntegre)
+                if (piece.EstUrl)
+                    chemin = piece.Chemin; // le navigateur par défaut s'en charge
+                else if (piece.EstIntegre)
                     chemin = ExtraireTemporaire(piece);
                 else
                 {

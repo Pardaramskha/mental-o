@@ -9,6 +9,42 @@ namespace Mentalo.Vue
     {
         public const string Puce = "• ";
         public const string Tiret = "– ";
+        // Cases à cocher (v0.15) : deux marqueurs, la case se coche au clic dans la boîte affichée.
+        public const string CaseVide = "☐ ";
+        public const string CaseCochee = "☑ ";
+
+        public static bool EstCase(string texte)
+        {
+            return texte.StartsWith(CaseVide) || texte.StartsWith(CaseCochee);
+        }
+
+        /// <summary>Inverse la case de la ligne demandée (index parmi les lignes découpées) ;
+        /// renvoie la liste d'origine si la ligne ne porte pas de case.</summary>
+        public static List<Segment> BasculerCase(List<Segment> source, int indexLigne)
+        {
+            List<List<Segment>> lignes = DecouperLignes(source);
+            if (indexLigne < 0 || indexLigne >= lignes.Count) return source;
+            List<Segment> ligne = lignes[indexLigne];
+            string texte = TexteDeLigne(ligne);
+            if (!EstCase(texte)) return source;
+            bool cochee = texte.StartsWith(CaseCochee);
+            RetirerMarqueur(ligne);
+            Segment prefixe = ligne.Count > 0 ? ligne[0].Cloner() : new Segment();
+            prefixe.Texte = cochee ? CaseVide : CaseCochee;
+            ligne.Insert(0, prefixe);
+            return RecomposerLignes(lignes);
+        }
+
+        /// <summary>Compte les cases (cochées, total) d'une suite de segments.</summary>
+        public static void CompterCases(List<Segment> source, ref int cochees, ref int total)
+        {
+            foreach (List<Segment> ligne in DecouperLignes(source))
+            {
+                string texte = TexteDeLigne(ligne);
+                if (texte.StartsWith(CaseCochee)) { cochees++; total++; }
+                else if (texte.StartsWith(CaseVide)) total++;
+            }
+        }
 
         /// <summary>Bascule le type demandé ("puce" | "tiret" | "numero") sur toutes les lignes.
         /// Si toutes les lignes non vides portent déjà ce marqueur, il est retiré.</summary>
@@ -33,6 +69,7 @@ namespace Mentalo.Vue
                 if (TexteDeLigne(ligne).Trim().Length == 0) continue;
                 string marqueur = type == "tiret" ? Tiret
                     : type == "numero" ? numero++ + ". "
+                    : type == "case" ? CaseVide
                     : Puce;
                 Segment prefixe = ligne.Count > 0 ? ligne[0].Cloner() : new Segment();
                 prefixe.Texte = marqueur;
@@ -45,6 +82,7 @@ namespace Mentalo.Vue
         {
             if (type == "puce") return texte.StartsWith(Puce);
             if (type == "tiret") return texte.StartsWith(Tiret);
+            if (type == "case") return EstCase(texte);
             int position = 0;
             while (position < texte.Length && char.IsDigit(texte[position])) position++;
             return position > 0 && position + 1 < texte.Length
@@ -54,7 +92,7 @@ namespace Mentalo.Vue
         /// <summary>Longueur du marqueur connu (puce, tiret, numéro) au début du texte, 0 sinon.</summary>
         public static int LongueurMarqueur(string texte)
         {
-            if (texte.StartsWith(Puce) || texte.StartsWith(Tiret)) return 2;
+            if (texte.StartsWith(Puce) || texte.StartsWith(Tiret) || EstCase(texte)) return 2;
             int position = 0;
             while (position < texte.Length && char.IsDigit(texte[position])) position++;
             if (position > 0 && position + 1 < texte.Length

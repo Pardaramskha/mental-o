@@ -41,6 +41,16 @@ namespace Mentalo
         private static readonly RoutedCommand CmdSouligne = new RoutedCommand();
         private static readonly RoutedCommand CmdInsererImage = new RoutedCommand();
         private static readonly RoutedCommand CmdInsererFichier = new RoutedCommand();
+        private static readonly RoutedCommand CmdInsererLienWeb = new RoutedCommand();
+        private static readonly RoutedCommand CmdToutSelectionner = new RoutedCommand();
+        private static readonly RoutedCommand CmdNote = new RoutedCommand();
+        private static readonly RoutedCommand CmdPlier = new RoutedCommand();
+        private static readonly RoutedCommand CmdZoomTout = new RoutedCommand();
+        private static readonly RoutedCommand CmdZoomSelection = new RoutedCommand();
+        private static readonly RoutedCommand CmdFocus = new RoutedCommand();
+        private MenuItem _menuFocus, _menuFiltre;
+        private Border _panneauFiltre;
+        private StackPanel _filtreContenu;
         private static readonly RoutedCommand CmdGrouper = new RoutedCommand();
         private static readonly RoutedCommand CmdDegrouper = new RoutedCommand();
         private static readonly RoutedCommand CmdModeAuto = new RoutedCommand();
@@ -166,6 +176,8 @@ namespace Mentalo
             zoneCentrale.Children.Add(_inspecteur);
             _panneauHistorique = ConstruireHistorique();
             zoneCentrale.Children.Add(_panneauHistorique);
+            _panneauFiltre = ConstruirePanneauFiltre();
+            zoneCentrale.Children.Add(_panneauFiltre);
             racine.Children.Add(zoneCentrale);
             Content = racine;
             SelectionOnglet("texte");
@@ -184,6 +196,11 @@ namespace Mentalo
                 MettreAJourInspecteur();
             };
             _toile.Historique.Change += MettreAJourHistorique;
+            _toile.EtiquettesChange += MettreAJourPanneauFiltre;
+            _toile.EstompageChange += delegate
+            {
+                if (_menuFocus != null) _menuFocus.IsChecked = _toile.FocusActif;
+            };
 
             // Sauvegarde automatique (option du fichier) : toutes les 3 minutes.
             DispatcherTimer minuterie = new DispatcherTimer { Interval = TimeSpan.FromSeconds(180) };
@@ -318,6 +335,14 @@ namespace Mentalo
             edition.Items.Add(Element("_Dupliquer", CmdDupliquer, GesteDe("dupliquer")));
             edition.Items.Add(new Separator());
             edition.Items.Add(Element("Rec_hercher…", CmdRechercher, GesteDe("rechercher")));
+            edition.Items.Add(Element("_Tout sélectionner", CmdToutSelectionner, GesteDe("tout-selectionner")));
+            edition.Items.Add(new Separator());
+            MenuItem noteBoite = Element("_Note de la boîte…", CmdNote, GesteDe("note"));
+            noteBoite.ToolTip = "Un détail hors de la carte : icône dans le coin de la boîte, texte en infobulle";
+            edition.Items.Add(noteBoite);
+            MenuItem etiquettes = new MenuItem { Header = "Éti_quettes du fichier…", ToolTip = "Créer, renommer, colorer, supprimer les étiquettes ; poser : clic droit > Étiquettes" };
+            etiquettes.Click += delegate { DialogueEtiquettes.Ouvrir(this, _toile); };
+            edition.Items.Add(etiquettes);
             edition.Items.Add(new Separator());
             MenuItem supprimer = new MenuItem { Header = "_Supprimer la sélection", InputGestureText = "Suppr" };
             supprimer.Click += delegate { _toile.SupprimerSelection(); };
@@ -325,6 +350,9 @@ namespace Mentalo
             edition.Items.Add(new Separator());
             edition.Items.Add(Element("_Grouper", CmdGrouper, "Ctrl+G"));
             edition.Items.Add(Element("Dégrou_per", CmdDegrouper, "Ctrl+Maj+G"));
+            MenuItem plier = Element("P_lier / déplier le groupe", CmdPlier, GesteDe("plier"));
+            plier.ToolTip = "Réduit le groupe sélectionné (ou celui de la boîte sélectionnée) à une pastille-titre ; double-clic sur la pastille pour déplier";
+            edition.Items.Add(plier);
             edition.Items.Add(new Separator());
             MenuItem aligner = new MenuItem { Header = "_Aligner et distribuer" };
             AjouterActionMenu(aligner, "Aligner à gauche", delegate { _toile.AlignerSelection("gauche"); });
@@ -352,6 +380,9 @@ namespace Mentalo
             MenuItem insererFichier = Element("_Fichier…", CmdInsererFichier, GesteDe("inserer-fichier"));
             insererFichier.ToolTip = "Lie un fichier (tout sauf une image) à la boîte sélectionnée, ou dans une boîte neuve";
             insertion.Items.Add(insererFichier);
+            MenuItem insererLienWeb = Element("Lien _web…", CmdInsererLienWeb, GesteDe("inserer-lien-web"));
+            insererLienWeb.ToolTip = "Une adresse web cliquable dans la boîte sélectionnée, ou dans une boîte neuve (on peut aussi glisser une adresse depuis le navigateur)";
+            insertion.Items.Add(insererLienWeb);
             menu.Items.Add(insertion);
 
             MenuItem affichage = new MenuItem { Header = "_Affichage" };
@@ -360,6 +391,13 @@ namespace Mentalo
             affichage.Items.Add(Element("Zoom _100 %", CmdZoomCent, "Ctrl+0"));
             affichage.Items.Add(new Separator());
             affichage.Items.Add(Element("_Recentrer la carte", CmdRecentrer, "Ctrl+R"));
+            affichage.Items.Add(Element("_Tout voir", CmdZoomTout, GesteDe("zoom-tout")));
+            affichage.Items.Add(Element("Zoom sur la _sélection", CmdZoomSelection, GesteDe("zoom-selection")));
+            affichage.Items.Add(new Separator());
+            _menuFocus = Element("_Mettre en avant la sélection", CmdFocus, GesteDe("focus"));
+            _menuFocus.IsCheckable = true;
+            _menuFocus.ToolTip = "Estompe tout sauf la sélection ; Échap ou un second appel rétablit";
+            affichage.Items.Add(_menuFocus);
             affichage.Items.Add(new Separator());
             _menuPleinEcran = Element("_Plein écran", CmdPleinEcran, GesteDe("plein-ecran"));
             affichage.Items.Add(_menuPleinEcran);
@@ -388,6 +426,9 @@ namespace Mentalo
             fenetres.Items.Add(_menuInspecteur);
             _menuHistorique = ElementPanneau("_Historique", delegate(bool visible) { ParametresGlobaux.HistoriqueVisible = visible; }, ParametresGlobaux.HistoriqueVisible);
             fenetres.Items.Add(_menuHistorique);
+            _menuFiltre = ElementPanneau("_Filtre par étiquettes", delegate(bool visible) { ParametresGlobaux.FiltreVisible = visible; }, ParametresGlobaux.FiltreVisible);
+            _menuFiltre.ToolTip = "Coche des étiquettes : les boîtes qui n'en portent aucune s'estompent";
+            fenetres.Items.Add(_menuFiltre);
             menu.Items.Add(fenetres);
 
             MenuItem aide = new MenuItem { Header = "_?" };
@@ -395,42 +436,12 @@ namespace Mentalo
             aPropos.Click += delegate
             {
                 DialogueMessage.Afficher(this,
-                    "Mental-o — v0.14\n\nLogiciel de carte mentale, simple et léger.\n\n" +
-                    "Fichiers attachés : Insertion > Fichier (Ctrl+Maj+F), glisser-déposer ou clic droit > Insérer un fichier\n" +
-                    "  → lien cliquable sous le texte : ouvrir, renommer, remplacer, intégrer au .tea (carte portable), supprimer\n" +
-                    "Fichiers .tea (l'ancien .zeubi s'ouvre toujours) · Fichier > Fichiers récents\n" +
-                    "Liens : tracé droit, courbe (poignée rose de courbure) ou équerre ; étiquette au milieu\n" +
-                    "Clic droit sur un lien : insérer une boîte au milieu (le lien devient deux tronçons)\n" +
-                    "Boîtes : ombre (aucune/légère/marquée) et opacité réglables (onglet Boîte ou clic droit)\n" +
-                    "Édition > Empiler la sélection : ranger les boîtes en colonne\n" +
-                    "Fichier > Exporter : PNG, PDF, SVG, Markdown, OPML · Imprimer (Ctrl+P)\n" +
-                    "Importer : texte à puces ou plan OPML → arbre de boîtes liées\n" +
-                    "Affichage : plein écran (F11), mode présentation (F5, Échap pour sortir)\n" +
-                    "Fichier > Associer les fichiers .tea : double-clic dans l'Explorateur\n\n" +
-                    "Ctrl+C/V/D : copier, coller, dupliquer des boîtes (liens internes compris)\n" +
-                    "Ctrl+F : rechercher · Flèches : naviguer de boîte en boîte · F2 : éditer\n" +
-                    "Glisser : magnétisme et guides d'alignement (Alt pour ignorer)\n" +
-                    "Modes : automatique, déplacement, liens, lecture (Ctrl+1 à Ctrl+4)\n" +
-                    "Les cadres de groupes se lient comme des boîtes (poignées au survol)\n" +
-                    "Barre de personnalisation à onglets (Texte / Boîte / Groupe / Lien) sous les modes\n" +
-                    "Listes : boutons • – 1. de l'onglet Texte (auto-liste optionnelle dans Paramètres)\n" +
-                    "Fichier > Préférences de fichier : identité, fond du tableau, texte et styles par défaut\n" +
-                    "  (onglets Boîtes / Liens / Groupes : le style des nouveaux éléments, enregistré dans le .tea)\n" +
-                    "Fichier > Paramètres : raccourcis personnalisables, favoris ★, profils\n" +
-                    "Fenêtres : Tust des raccourcis, mini-carte, inspecteur, historique\n" +
-                    "Modes (barre du haut ou Ctrl+1/2/3) : automatique, déplacement seul, liens seuls\n" +
-                    "Insertion > Image (Ctrl+Maj+I), glisser-déposer ou Ctrl+V : insérer une image (5 Mo max)\n" +
-                    "Poignée en bas à droite : redimensionner (image : Maj = libre ; texte : largeur)\n" +
-                    "Double-clic sur le fond : créer une boîte\n" +
-                    "Double-clic sur une boîte : modifier le texte (avant et après l'image)\n" +
-                    "Entrée : retour à la ligne · Maj+Entrée : valider · Échap : abandonner\n" +
-                    "Ctrl+clic ou rectangle : sélection multiple · Ctrl+G : grouper · Ctrl+Maj+G : dégrouper\n" +
-                    "Mise en forme : barre du haut ou clic droit (boîte entière ou sélection)\n" +
-                    "Style de la boîte (fond, bordure, coins) : clic droit sur la boîte\n" +
-                    "Poignées bleues sur les bords d'une boîte : tirer vers une autre boîte pour créer un lien\n" +
-                    "Clic droit sur un lien : couleur, épaisseur, trait, flèches\n" +
-                    "Molette : défiler · Ctrl+molette : zoomer\n" +
-                    "Espace+glisser ou clic molette : déplacer la vue",
+                    "Mental-o — v0.15\n\nLogiciel de carte mentale, simple et léger.\n\n" +
+                    "Grandes cartes : Tout voir (Ctrl+Maj+0), zoom sur la sélection (Ctrl+Maj+1), Ctrl+A, Alt+rectangle = désélectionner\n" +
+                    "Plier / déplier un groupe (Ctrl+Maj+P, clic droit sur le cadre, double-clic sur la pastille)\n" +
+                    "Notes cachées (Ctrl+Maj+N, icône dans le coin) · Étiquettes (clic droit > Étiquettes, Fenêtres > Filtre) · Mettre en avant (Ctrl+Maj+M)\n" +
+                    "Cases à cocher (bouton ☐ de l'onglet Texte, clic pour cocher, avancement dans le titre du groupe) · Liens web (Ctrl+Maj+L, glisser une adresse)\n" +
+                    "Crédits à Gruffystudio de FlatIcon.com pour l'icône de l'app.",
                     "À propos de Mental-o", MessageBoxButton.OK, MessageBoxImage.Information);
             };
             aide.Items.Add(aPropos);
@@ -1272,6 +1283,7 @@ namespace Mentalo
             panneau.Children.Add(BoutonPuce("•", "Liste à puces", "puce"));
             panneau.Children.Add(BoutonPuce("–", "Liste à tirets", "tiret"));
             panneau.Children.Add(BoutonPuce("1.", "Liste numérotée", "numero"));
+            panneau.Children.Add(BoutonPuce("☐", "Cases à cocher (cliquer une case dans la boîte pour la cocher)", "case"));
 
             return panneau;
         }
@@ -1584,6 +1596,13 @@ namespace Mentalo
             CommandBindings.Add(new CommandBinding(CmdSouligne, delegate { _toile.AppliquerFormatTexte("souligne", null); }));
             CommandBindings.Add(new CommandBinding(CmdInsererImage, delegate { ChoisirImage(); }));
             CommandBindings.Add(new CommandBinding(CmdInsererFichier, delegate { ChoisirFichier(); }));
+            CommandBindings.Add(new CommandBinding(CmdInsererLienWeb, delegate { _toile.InsererLienWeb(); }));
+            CommandBindings.Add(new CommandBinding(CmdToutSelectionner, delegate { _toile.SelectionnerTout(); }));
+            CommandBindings.Add(new CommandBinding(CmdNote, delegate { _toile.EditerNoteSelection(); }));
+            CommandBindings.Add(new CommandBinding(CmdPlier, delegate { _toile.BasculerPliageCible(); }));
+            CommandBindings.Add(new CommandBinding(CmdZoomTout, delegate { _toile.ZoomToutVoir(); }));
+            CommandBindings.Add(new CommandBinding(CmdZoomSelection, delegate { _toile.ZoomSurSelection(); }));
+            CommandBindings.Add(new CommandBinding(CmdFocus, delegate { _toile.BasculerFocusSelection(); }));
             CommandBindings.Add(new CommandBinding(CmdGrouper, delegate { _toile.GrouperSelection(); }));
             CommandBindings.Add(new CommandBinding(CmdDegrouper, delegate { _toile.DegrouperSelection(); }));
             CommandBindings.Add(new CommandBinding(CmdModeAuto, delegate { _toile.DefinirMode("automatique"); MettreAJourBarreModes(); }));
@@ -1630,6 +1649,13 @@ namespace Mentalo
                 { "degrouper", CmdDegrouper },
                 { "inserer-image", CmdInsererImage },
                 { "inserer-fichier", CmdInsererFichier },
+                { "inserer-lien-web", CmdInsererLienWeb },
+                { "tout-selectionner", CmdToutSelectionner },
+                { "note", CmdNote },
+                { "plier", CmdPlier },
+                { "zoom-tout", CmdZoomTout },
+                { "zoom-selection", CmdZoomSelection },
+                { "focus", CmdFocus },
                 { "zoom-avant", CmdZoomAvant },
                 { "zoom-arriere", CmdZoomArriere },
                 { "zoom-100", CmdZoomCent },
@@ -1692,6 +1718,7 @@ namespace Mentalo
             {
                 if (_presentation) { QuitterPresentation(); e.Handled = true; }
                 else if (_pleinEcran) { DefinirPleinEcran(false); e.Handled = true; }
+                else if (_toile.FocusActif) { _toile.AnnulerFocus(); e.Handled = true; }
             }
             else if (e.Key == Key.Left) { _toile.NaviguerSelection(-1, 0); e.Handled = true; }
             else if (e.Key == Key.Right) { _toile.NaviguerSelection(1, 0); e.Handled = true; }
@@ -1835,9 +1862,17 @@ namespace Mentalo
                 Rect rect = _toile.RectangleDuNoeud(noeud);
                 string type = noeud.EstImage ? "Boîte-image" : "Boîte";
                 if (noeud.Fichiers.Count > 0)
-                    type += string.Format(" · {0} fichier{1} lié{1}", noeud.Fichiers.Count, noeud.Fichiers.Count > 1 ? "s" : "");
+                    type += string.Format(" · {0} lien{1}", noeud.Fichiers.Count, noeud.Fichiers.Count > 1 ? "s" : "");
                 string extra = _toile.NbSelectionnes > 1
                     ? string.Format("\n({0} boîtes sélectionnées)", _toile.NbSelectionnes) : "";
+                if (noeud.Etiquettes.Count > 0) extra += "\nÉtiquettes : " + string.Join(", ", noeud.Etiquettes.ToArray());
+                string cases = ToileVue.ProgressionBoite(noeud);
+                if (cases.Length > 0) extra += "\nCases cochées : " + cases;
+                if (noeud.ANote)
+                {
+                    string note = noeud.Note.Replace("\r", "").Replace("\n", " ");
+                    extra += "\nNote : " + (note.Length > 60 ? note.Substring(0, 60) + "…" : note);
+                }
                 _inspecteurTexte.Text = string.Format(
                     "{0}\nX : {1:0} · Y : {2:0}\nLargeur : {3:0} · Hauteur : {4:0}{5}",
                     type, rect.X, rect.Y, rect.Width, rect.Height, extra);
@@ -1878,12 +1913,122 @@ namespace Mentalo
             _miniCarte.Visibility = ParametresGlobaux.MiniCarteVisible ? Visibility.Visible : Visibility.Collapsed;
             _inspecteur.Visibility = ParametresGlobaux.InspecteurVisible ? Visibility.Visible : Visibility.Collapsed;
             _panneauHistorique.Visibility = ParametresGlobaux.HistoriqueVisible ? Visibility.Visible : Visibility.Collapsed;
+            if (_panneauFiltre != null)
+            {
+                _panneauFiltre.Visibility = ParametresGlobaux.FiltreVisible ? Visibility.Visible : Visibility.Collapsed;
+                if (!ParametresGlobaux.FiltreVisible && _toile.FiltreActif) _toile.DefinirFiltreEtiquettes(null, false);
+                if (_menuFiltre != null) _menuFiltre.IsChecked = ParametresGlobaux.FiltreVisible;
+                MettreAJourPanneauFiltre();
+            }
             if (_menuMiniCarte != null) _menuMiniCarte.IsChecked = ParametresGlobaux.MiniCarteVisible;
             if (_menuInspecteur != null) _menuInspecteur.IsChecked = ParametresGlobaux.InspecteurVisible;
             if (_menuHistorique != null) _menuHistorique.IsChecked = ParametresGlobaux.HistoriqueVisible;
             MettreAJourMiniCarte();
             MettreAJourInspecteur();
             MettreAJourHistorique();
+        }
+
+        // ------------------------------------------------------------------ filtre par étiquettes (v0.15)
+
+        /// <summary>Panneau flottant en haut à gauche : une case par étiquette du fichier, plus
+        /// « sans étiquette ». Dès qu'une case est cochée, les boîtes qui ne correspondent pas
+        /// s'estompent. Fermer le panneau lève le filtre.</summary>
+        private Border ConstruirePanneauFiltre()
+        {
+            _filtreContenu = new StackPanel { MinWidth = 170 };
+            Border panneau = PanneauFlottant(HorizontalAlignment.Left, VerticalAlignment.Top, _filtreContenu);
+            panneau.Visibility = Visibility.Collapsed;
+            return panneau;
+        }
+
+        private void MettreAJourPanneauFiltre()
+        {
+            if (_filtreContenu == null) return;
+            _filtreContenu.Children.Clear();
+            TextBlock titre = new TextBlock
+            {
+                Text = "Filtre par étiquettes",
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Chrome.Encre,
+                Margin = new Thickness(0, 0, 0, 6)
+            };
+            _filtreContenu.Children.Add(titre);
+            HashSet<string> actives = _toile.FiltreEtiquettes;
+            List<Etiquette> definitions = _toile.Document.Etiquettes;
+            if (definitions.Count == 0)
+            {
+                _filtreContenu.Children.Add(new TextBlock
+                {
+                    Text = "Aucune étiquette dans ce fichier.\nClic droit sur une boîte > Étiquettes.",
+                    Foreground = Chrome.TexteDoux,
+                    TextWrapping = TextWrapping.Wrap
+                });
+            }
+            foreach (Etiquette e in definitions)
+            {
+                string nom = e.Nom;
+                StackPanel ligne = new StackPanel { Orientation = Orientation.Horizontal };
+                ligne.Children.Add(new Border
+                {
+                    Width = 11, Height = 11, CornerRadius = new CornerRadius(5.5),
+                    Background = new SolidColorBrush(TexteRiche.CouleurDepuis(e.Couleur, Colors.SteelBlue)),
+                    Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center
+                });
+                ligne.Children.Add(new TextBlock { Text = nom, VerticalAlignment = VerticalAlignment.Center });
+                ligne.Children.Add(new TextBlock
+                {
+                    Text = " (" + _toile.CompterPorteurs(nom) + ")",
+                    Foreground = Chrome.TexteDoux, VerticalAlignment = VerticalAlignment.Center
+                });
+                CheckBox case_ = new CheckBox
+                {
+                    Content = ligne,
+                    IsChecked = actives != null && actives.Contains(nom),
+                    Margin = new Thickness(0, 2, 0, 2),
+                    Focusable = false
+                };
+                case_.Click += delegate { AppliquerFiltreDepuisPanneau(); };
+                _filtreContenu.Children.Add(case_);
+            }
+            if (definitions.Count > 0)
+            {
+                CheckBox sans = new CheckBox
+                {
+                    Content = new TextBlock { Text = "Sans étiquette", Foreground = Chrome.TexteDoux },
+                    IsChecked = actives != null && _toile.FiltreSansEtiquette,
+                    Margin = new Thickness(0, 6, 0, 2),
+                    Focusable = false,
+                    Tag = "sans"
+                };
+                sans.Click += delegate { AppliquerFiltreDepuisPanneau(); };
+                _filtreContenu.Children.Add(sans);
+            }
+            StackPanel boutons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
+            Button tout = new Button { Content = "Tout afficher", Focusable = false, Padding = new Thickness(8, 2, 8, 2), IsEnabled = actives != null };
+            tout.Click += delegate { _toile.DefinirFiltreEtiquettes(null, false); MettreAJourPanneauFiltre(); };
+            boutons.Children.Add(tout);
+            Button gerer = new Button { Content = "Gérer…", Focusable = false, Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(6, 0, 0, 0) };
+            gerer.Click += delegate { DialogueEtiquettes.Ouvrir(this, _toile); MettreAJourPanneauFiltre(); };
+            boutons.Children.Add(gerer);
+            _filtreContenu.Children.Add(boutons);
+        }
+
+        private void AppliquerFiltreDepuisPanneau()
+        {
+            HashSet<string> actives = new HashSet<string>();
+            bool sans = false;
+            foreach (UIElement enfant in _filtreContenu.Children)
+            {
+                CheckBox case_ = enfant as CheckBox;
+                if (case_ == null || case_.IsChecked != true) continue;
+                if ((case_.Tag as string) == "sans") { sans = true; continue; }
+                StackPanel ligne = case_.Content as StackPanel;
+                if (ligne != null && ligne.Children.Count > 1)
+                    actives.Add(((TextBlock)ligne.Children[1]).Text);
+            }
+            if (actives.Count == 0 && !sans) _toile.DefinirFiltreEtiquettes(null, false);
+            else _toile.DefinirFiltreEtiquettes(actives, sans);
+            MettreAJourPanneauFiltre();
         }
 
         // ------------------------------------------------------------------ Tust des raccourcis
