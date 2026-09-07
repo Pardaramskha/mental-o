@@ -3584,6 +3584,29 @@ namespace Mentalo.Vue
             if (pourEditeur && _selection != null)
             {
                 IInputElement cible = _selection.CibleCommandes;
+                // Orthographe (v0.16) : le mot fautif sous le curseur, ses corrections en tête de menu.
+                string motFautif;
+                List<string> suggestions = _selection.SuggestionsOrthographe(out motFautif);
+                if (motFautif != null)
+                {
+                    NoeudVisuel editeur = _selection;
+                    if (suggestions.Count == 0)
+                        menu.Items.Add(new MenuItem { Header = "(aucune suggestion)", IsEnabled = false });
+                    foreach (string suggestion in suggestions)
+                    {
+                        string choix = suggestion;
+                        MenuItem element = new MenuItem { Header = choix, FontWeight = FontWeights.SemiBold };
+                        element.Click += delegate { editeur.CorrigerMot(choix); };
+                        menu.Items.Add(element);
+                    }
+                    MenuItem ignorer = new MenuItem { Header = "Ignorer « " + motFautif + " »" };
+                    ignorer.Click += delegate { editeur.IgnorerMot(); };
+                    menu.Items.Add(ignorer);
+                    MenuItem ajouter = new MenuItem { Header = "Ajouter au dictionnaire", ToolTip = "Dictionnaire personnel : %APPDATA%\\Mental-o\\dictionnaire.lex" };
+                    ajouter.Click += delegate { editeur.AjouterAuDictionnaire(); };
+                    menu.Items.Add(ajouter);
+                    menu.Items.Add(new Separator());
+                }
                 menu.Items.Add(new MenuItem { Header = "Couper", Command = ApplicationCommands.Cut, CommandTarget = cible });
                 menu.Items.Add(new MenuItem { Header = "Copier", Command = ApplicationCommands.Copy, CommandTarget = cible });
                 menu.Items.Add(new MenuItem { Header = "Coller", Command = ApplicationCommands.Paste, CommandTarget = cible });

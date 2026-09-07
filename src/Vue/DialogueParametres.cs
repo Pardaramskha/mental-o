@@ -60,6 +60,48 @@ namespace Mentalo.Vue
                 ParametresGlobaux.Magnetisme = magnetisme.IsChecked == true;
             };
             panneau.Children.Add(magnetisme);
+
+            // Correcteur orthographique (v0.16) : celui de Windows, via WPF.
+            CheckBox correcteur = new CheckBox
+            {
+                Content = "Souligner les fautes d'orthographe pendant la saisie (clic droit : suggestions, ignorer, ajouter au dictionnaire)",
+                IsChecked = ParametresGlobaux.Correcteur,
+                Margin = new Thickness(0, 16, 0, 0)
+            };
+            correcteur.Click += delegate
+            {
+                ParametresGlobaux.Correcteur = correcteur.IsChecked == true;
+            };
+            panneau.Children.Add(correcteur);
+
+            StackPanel ligneLangue = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(22, 8, 0, 0) };
+            ligneLangue.Children.Add(new TextBlock { Text = "Langue :", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
+            ComboBox langue = new ComboBox { Width = 200 };
+            for (int i = 0; i < ParametresGlobaux.LanguesCorrecteur.GetLength(0); i++)
+                langue.Items.Add(new ComboBoxItem { Content = ParametresGlobaux.LanguesCorrecteur[i, 0], Tag = ParametresGlobaux.LanguesCorrecteur[i, 1] });
+            SelectionnerTag(langue, ParametresGlobaux.LangueCorrecteur);
+            if (langue.SelectedItem == null)
+            {
+                langue.Items.Add(new ComboBoxItem { Content = ParametresGlobaux.LangueCorrecteur, Tag = ParametresGlobaux.LangueCorrecteur });
+                langue.SelectedIndex = langue.Items.Count - 1;
+            }
+            langue.SelectionChanged += delegate
+            {
+                ComboBoxItem choix = langue.SelectedItem as ComboBoxItem;
+                if (choix != null) ParametresGlobaux.LangueCorrecteur = (string)choix.Tag;
+            };
+            ligneLangue.Children.Add(langue);
+            panneau.Children.Add(ligneLangue);
+            panneau.Children.Add(new TextBlock
+            {
+                Text = "Le dictionnaire de la langue doit être installé dans Windows (Paramètres > Heure et langue > Langue). "
+                    + "Les mots ajoutés vont dans " + ParametresGlobaux.CheminDictionnairePerso() + ".",
+                Foreground = Chrome.TexteDoux,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(22, 6, 0, 0),
+                MaxWidth = 520,
+                HorizontalAlignment = HorizontalAlignment.Left
+            });
             return panneau;
         }
 

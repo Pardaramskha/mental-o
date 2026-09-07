@@ -51,6 +51,10 @@ namespace Mentalo
         private MenuItem _menuFocus, _menuFiltre;
         private Border _panneauFiltre;
         private StackPanel _filtreContenu;
+
+        // Copies de secours (v0.16) : une clé par carte ouverte, une copie par minute si modifiée.
+        private string _cleSecours = Secours.NouvelleCle();
+        private bool _modifieDepuisSecours;
         private static readonly RoutedCommand CmdGrouper = new RoutedCommand();
         private static readonly RoutedCommand CmdDegrouper = new RoutedCommand();
         private static readonly RoutedCommand CmdModeAuto = new RoutedCommand();
@@ -126,6 +130,7 @@ namespace Mentalo
             _toile.DocumentModifie += delegate
             {
                 if (!_modifie) { _modifie = true; MettreAJourTitre(); }
+                _modifieDepuisSecours = true;
             };
             _texteZoom = new TextBlock();
             _texteZoom.Margin = new Thickness(8, 3, 8, 3);
@@ -211,6 +216,19 @@ namespace Mentalo
             };
             minuterie.Start();
 
+            // Copie de secours (v0.16) : chaque minute, si quelque chose a changé depuis la dernière.
+            DispatcherTimer secours = new DispatcherTimer { Interval = TimeSpan.FromSeconds(60) };
+            secours.Tick += delegate
+            {
+                if (_modifie && _modifieDepuisSecours)
+                {
+                    Secours.Ecrire(_toile.Document, _cleSecours, _cheminFichier);
+                    _modifieDepuisSecours = false;
+                }
+            };
+            secours.Start();
+            Loaded += delegate { ProposerRecuperation(); };
+
             _texteZoom.Text = "Zoom : 100 %";
             MettreAJourBarreFormat();
             MettreAJourTust();
@@ -282,6 +300,13 @@ namespace Mentalo
             fichier.Items.Add(new Separator());
             fichier.Items.Add(Element("_Enregistrer", ApplicationCommands.Save, GesteDe("enregistrer")));
             fichier.Items.Add(Element("Enregistrer _sous…", ApplicationCommands.SaveAs, GesteDe("enregistrer-sous")));
+            MenuItem versions = new MenuItem
+            {
+                Header = "_Versions antérieures…",
+                ToolTip = "Les états précédents conservés dans le fichier à chaque enregistrement (au plus " + Fichier.VersionsMax + ")"
+            };
+            versions.Click += delegate { OuvrirVersions(); };
+            fichier.Items.Add(versions);
             fichier.Items.Add(new Separator());
             MenuItem exporter = new MenuItem { Header = "E_xporter" };
             AjouterActionMenu(exporter, "Image PNG…", delegate { ExporterImage(); });
@@ -436,7 +461,9 @@ namespace Mentalo
             aPropos.Click += delegate
             {
                 DialogueMessage.Afficher(this,
-                    "Mental-o — v0.15\n\nLogiciel de carte mentale, simple et léger.\n\n" +
+                    "Mental-o — v0.16\n\nLogiciel de carte mentale, simple et léger.\n\n" +
+                    "Confiance : copie de secours chaque minute (récupération proposée au démarrage suivant), Fichier > Versions antérieures\n" +
+                    "Correcteur orthographique de Windows pendant la saisie (clic droit : corrections, ignorer, dictionnaire personnel ; Paramètres > Édition)\n" +
                     "Grandes cartes : Tout voir (Ctrl+Maj+0), zoom sur la sélection (Ctrl+Maj+1), Ctrl+A, Alt+rectangle = désélectionner\n" +
                     "Plier / déplier un groupe (Ctrl+Maj+P, clic droit sur le cadre, double-clic sur la pastille)\n" +
                     "Notes cachées (Ctrl+Maj+N, icône dans le coin) · Étiquettes (clic droit > Étiquettes, Fenêtres > Filtre) · Mettre en avant (Ctrl+Maj+M)\n" +
@@ -2427,9 +2454,85 @@ namespace Mentalo
         private void Nouveau()
         {
             if (!ConfirmerAbandon()) return;
+            NouvelleSessionSecours();
             _toile.ChargerDocument(new DocumentCarte());
             _cheminFichier = null;
             _modifie = false;
+            MettreAJourTitre();
+        }
+
+        /// <summary>La carte précédente quitte l'écran : sa copie de secours n'a plus d'objet.</summary>
+        private void NouvelleSessionSecours()
+        {
+            Secours.Effacer(_cleSecours);
+            _cleSecours = Secours.NouvelleCle();
+            _modifieDepuisSecours = false;
+        }
+
+        /// <summary>Au démarrage : des copies de secours laissées par une session interrompue ?
+        /// La plus récente est rouverte, les autres sont rangées dans Documents.</summary>
+        private void ProposerRecuperation()
+        {
+            List<Secours.Entree> entrees = Secours.Lister();
+            if (entrees.Count == 0) return;
+            System.Text.StringBuilder texte = new System.Text.StringBuilder();
+            texte.Append(entrees.Count == 1
+                ? "Mental-o s'est arrêté sans enregistrer une carte :\n"
+                : "Mental-o s'est arrêté sans enregistrer " + entrees.Count + " cartes :\n");
+            foreach (Secours.Entree entree in entrees)
+                texte.Append("  • ").Append(entree.NomAffiche).Append(" (").Append(entree.Date).Append(")\n");
+            texte.Append(entrees.Count == 1
+                ? "\nLa restaurer ? (Non = abandonner la copie de secours)"
+                : "\nLes restaurer ? La plus récente s'ouvre ici, les autres sont copiées dans Documents. (Non = abandonner)");
+            MessageBoxResult reponse = DialogueMessage.Afficher(this, texte.ToString(), "Récupération",
+                MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (reponse != MessageBoxResult.Yes)
+            {
+                foreach (Secours.Entree entree in entrees) Secours.Effacer(entree.Cle);
+                return;
+            }
+            Secours.Entree principale = entrees[0];
+            List<string> ranges = new List<string>();
+            for (int i = 1; i < entrees.Count; i++)
+            {
+                string chemin = Secours.Exfiltrer(entrees[i]);
+                if (chemin != null) ranges.Add(chemin);
+            }
+            try
+            {
+                DocumentCarte document = Fichier.Charger(principale.Fichier);
+                NouvelleSessionSecours();
+                _toile.ChargerDocument(document);
+                _cheminFichier = !string.IsNullOrEmpty(principale.Chemin) ? principale.Chemin : null;
+                _modifie = true; // récupéré, mais pas encore réécrit sur le disque
+                _modifieDepuisSecours = true;
+                MettreAJourTitre();
+                Secours.Effacer(principale.Cle);
+            }
+            catch (Exception ex)
+            {
+                DialogueMessage.Afficher(this, "Impossible de relire la copie de secours :\n" + ex.Message
+                    + "\n\nElle reste dans " + System.IO.Path.GetDirectoryName(principale.Fichier),
+                    "Récupération", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            if (ranges.Count > 0)
+                DialogueMessage.Afficher(this, "Autres cartes récupérées, rangées dans Documents :\n  • "
+                    + string.Join("\n  • ", ranges.ToArray()), "Récupération", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private void OuvrirVersions()
+        {
+            if (_cheminFichier == null)
+            {
+                DialogueMessage.Afficher(this, "Cette carte n'a jamais été enregistrée : aucune version antérieure.",
+                    "Versions antérieures", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            DocumentCarte version = DialogueVersions.Ouvrir(this, _cheminFichier);
+            if (version == null) return;
+            _toile.ChargerDocument(version);
+            _modifie = true; // la version restaurée attend un enregistrement pour devenir le fichier
+            _modifieDepuisSecours = true;
             MettreAJourTitre();
         }
 
@@ -2448,6 +2551,7 @@ namespace Mentalo
             try
             {
                 DocumentCarte document = Fichier.Charger(chemin);
+                NouvelleSessionSecours();
                 _toile.ChargerDocument(document);
                 _cheminFichier = chemin;
                 _modifie = false;
@@ -2580,6 +2684,9 @@ namespace Mentalo
                 Fichier.Enregistrer(_toile.Document, chemin);
                 _cheminFichier = chemin;
                 _modifie = false;
+                // Le fichier est à jour : la copie de secours n'a plus d'objet.
+                Secours.Effacer(_cleSecours);
+                _modifieDepuisSecours = false;
                 MettreAJourTitre();
                 RetenirFichierRecent(chemin);
                 return true;
@@ -2608,6 +2715,7 @@ namespace Mentalo
         protected override void OnClosing(CancelEventArgs e)
         {
             if (!ConfirmerAbandon()) e.Cancel = true;
+            else Secours.Effacer(_cleSecours); // fermeture normale : rien à récupérer
             base.OnClosing(e);
         }
 

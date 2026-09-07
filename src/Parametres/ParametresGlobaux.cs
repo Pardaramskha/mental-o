@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Web.Script.Serialization;
 using System.Windows.Input;
 
@@ -35,6 +36,8 @@ namespace Mentalo.Parametres
         public bool themeSombre { get; set; }
         public bool? vignette { get; set; }    // nullable : absent = activée
         public bool? magnetisme { get; set; }  // idem
+        public bool? correcteur { get; set; }  // v0.16 : correcteur orthographique (absent = activé)
+        public string langueCorrecteur { get; set; }
         public List<string> stylesFavoris { get; set; }
         public List<string> fichiersRecents { get; set; }
     }
@@ -99,6 +102,45 @@ namespace Mentalo.Parametres
         public static bool ThemeSombre;
         public static bool VignetteTableau = true; // légère ombre sur les bords du tableau
         public static bool Magnetisme = true;      // aimant + guides pendant le glisser (Alt pour ignorer)
+        public static bool Correcteur = true;      // v0.16 : soulignement des fautes pendant la saisie (correcteur de Windows)
+        public static string LangueCorrecteur = "fr-FR";
+
+        /// <summary>Les langues proposées dans Paramètres > Édition (le dictionnaire doit être installé dans Windows).</summary>
+        public static readonly string[,] LanguesCorrecteur =
+        {
+            { "Français (France)", "fr-FR" }, { "Français (Canada)", "fr-CA" }, { "Anglais (États-Unis)", "en-US" },
+            { "Anglais (Royaume-Uni)", "en-GB" }, { "Allemand", "de-DE" }, { "Espagnol", "es-ES" }, { "Italien", "it-IT" }
+        };
+
+        /// <summary>Le dictionnaire personnel (mots ajoutés au clic droit), un mot par ligne.</summary>
+        public static string CheminDictionnairePerso()
+        {
+            string dossier = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Mental-o");
+            Directory.CreateDirectory(dossier);
+            return Path.Combine(dossier, "dictionnaire.lex");
+        }
+
+        /// <summary>Ajoute un mot au dictionnaire personnel (fichier .lex, UTF-16 LE comme
+        /// l'attend le correcteur de WPF). Renvoie faux si déjà présent ou illisible.</summary>
+        public static bool AjouterMotDictionnaire(string mot)
+        {
+            if (string.IsNullOrWhiteSpace(mot)) return false;
+            mot = mot.Trim();
+            try
+            {
+                string chemin = CheminDictionnairePerso();
+                List<string> mots = new List<string>();
+                if (File.Exists(chemin))
+                    mots.AddRange(File.ReadAllLines(chemin, Encoding.Unicode));
+                foreach (string existant in mots)
+                    if (string.Equals(existant.Trim(), mot, StringComparison.Ordinal)) return false;
+                mots.Add(mot);
+                File.WriteAllLines(chemin, mots.ToArray(), Encoding.Unicode);
+                return true;
+            }
+            catch { return false; }
+        }
         public static List<string> StylesFavoris = new List<string>(); // StyleBoite.Serialiser()
         public static List<string> FichiersRecents = new List<string>(); // 5 derniers .tea ouverts/enregistrés
 
@@ -171,6 +213,8 @@ namespace Mentalo.Parametres
                 ThemeSombre = dto.themeSombre;
                 if (dto.vignette.HasValue) VignetteTableau = dto.vignette.Value;
                 if (dto.magnetisme.HasValue) Magnetisme = dto.magnetisme.Value;
+                if (dto.correcteur.HasValue) Correcteur = dto.correcteur.Value;
+                if (!string.IsNullOrEmpty(dto.langueCorrecteur)) LangueCorrecteur = dto.langueCorrecteur;
                 if (dto.stylesFavoris != null) StylesFavoris = dto.stylesFavoris;
                 if (dto.fichiersRecents != null) FichiersRecents = dto.fichiersRecents;
             }
@@ -195,6 +239,8 @@ namespace Mentalo.Parametres
                 dto.themeSombre = ThemeSombre;
                 dto.vignette = VignetteTableau;
                 dto.magnetisme = Magnetisme;
+                dto.correcteur = Correcteur;
+                dto.langueCorrecteur = LangueCorrecteur;
                 dto.stylesFavoris = StylesFavoris;
                 dto.fichiersRecents = FichiersRecents;
                 File.WriteAllText(Chemin(), new JavaScriptSerializer().Serialize(dto));

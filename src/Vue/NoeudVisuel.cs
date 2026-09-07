@@ -156,6 +156,13 @@ namespace Mentalo.Vue
             _editeur.Visibility = Visibility.Collapsed;
             _editeur.PreviewKeyDown += EditeurToucheEnfoncee;
             _editeur.LostFocus += EditeurFocusPerdu;
+            // Clic droit : le curseur rejoint le mot cliqué, pour que le menu propose SES corrections.
+            _editeur.PreviewMouseRightButtonDown += delegate(object expediteur, MouseButtonEventArgs e)
+            {
+                if (!_editeur.Selection.IsEmpty) return;
+                TextPointer position = _editeur.GetPositionFromPoint(e.GetPosition(_editeur), true);
+                if (position != null) _editeur.CaretPosition = position;
+            };
             _editeur.SelectionChanged += delegate
             {
                 if (!_enEdition) return;
@@ -509,6 +516,7 @@ namespace Mentalo.Vue
             _editeur.FontFamily = new FontFamily(Segment.PoliceDefaut);
             _editeur.FontSize = Segment.TailleDefaut;
             _editeur.Foreground = new SolidColorBrush(TexteRiche.CouleurDepuis(Segment.CouleurDefaut, Colors.Black));
+            ConfigurerCorrecteur();
             _segmentsAvantEdition = Noeud.CopieDe(Modele.Segments);
             _segmentsApresAvantEdition = Noeud.CopieDe(Modele.SegmentsApres);
             _alignementAvantEdition = Modele.Alignement;
@@ -569,6 +577,104 @@ namespace Mentalo.Vue
             resultat.NouvelAlignement = alignement;
             Action<NoeudVisuel, ResultatEdition> h = EditionTerminee;
             if (h != null) h(this, resultat);
+        }
+
+        // ------------------------------------------------------------------ correcteur orthographique (v0.16)
+
+        private bool _dictionnaireBranche;
+
+        /// <summary>Active le correcteur de Windows sur l'éditeur (langue des paramètres,
+        /// dictionnaire personnel). Sans dictionnaire installé, rien n'est souligné.</summary>
+        private void ConfigurerCorrecteur()
+        {
+            try
+            {
+                _editeur.Language = System.Windows.Markup.XmlLanguage.GetLanguage(
+                    Mentalo.Parametres.ParametresGlobaux.LangueCorrecteur ?? "fr-FR");
+                bool actif = Mentalo.Parametres.ParametresGlobaux.Correcteur;
+                if (actif && !_dictionnaireBranche)
+                {
+                    string lex = Mentalo.Parametres.ParametresGlobaux.CheminDictionnairePerso();
+                    if (File.Exists(lex)) SpellCheck.GetCustomDictionaries(_editeur).Add(new Uri(lex));
+                    _dictionnaireBranche = true;
+                }
+                SpellCheck.SetIsEnabled(_editeur, actif);
+            }
+            catch
+            {
+                try { SpellCheck.SetIsEnabled(_editeur, false); }
+                catch { }
+            }
+        }
+
+        /// <summary>L'erreur sous le curseur, ou null.</summary>
+        private SpellingError ErreurAuCurseur()
+        {
+            if (!_enEdition || !SpellCheck.GetIsEnabled(_editeur)) return null;
+            try { return _editeur.GetSpellingError(_editeur.CaretPosition); }
+            catch { return null; }
+        }
+
+        /// <summary>Les suggestions pour le mot fautif sous le curseur ; « mot » = null s'il n'y a pas de faute.</summary>
+        public List<string> SuggestionsOrthographe(out string mot)
+        {
+            mot = null;
+            List<string> suggestions = new List<string>();
+            SpellingError erreur = ErreurAuCurseur();
+            if (erreur == null) return suggestions;
+            try
+            {
+                TextRange plage = _editeur.GetSpellingErrorRange(_editeur.CaretPosition);
+                mot = plage == null ? "" : plage.Text;
+                foreach (string s in erreur.Suggestions)
+                {
+                    suggestions.Add(s);
+                    if (suggestions.Count >= 6) break;
+                }
+            }
+            catch { mot = null; }
+            return suggestions;
+        }
+
+        public void CorrigerMot(string suggestion)
+        {
+            SpellingError erreur = ErreurAuCurseur();
+            if (erreur != null) erreur.Correct(suggestion);
+            _editeur.Focus();
+        }
+
+        public void IgnorerMot()
+        {
+            SpellingError erreur = ErreurAuCurseur();
+            if (erreur != null) erreur.IgnoreAll();
+            _editeur.Focus();
+        }
+
+        /// <summary>Ajoute le mot fautif au dictionnaire personnel et recharge celui-ci.</summary>
+        public void AjouterAuDictionnaire()
+        {
+            string mot;
+            SuggestionsOrthographe(out mot);
+            if (string.IsNullOrWhiteSpace(mot)) return;
+            SpellingError erreur = ErreurAuCurseur();
+            if (Mentalo.Parametres.ParametresGlobaux.AjouterMotDictionnaire(mot))
+            {
+                try
+                {
+                    Uri lex = new Uri(Mentalo.Parametres.ParametresGlobaux.CheminDictionnairePerso());
+                    System.Collections.IList dictionnaires = SpellCheck.GetCustomDictionaries(_editeur);
+                    if (dictionnaires.Contains(lex)) dictionnaires.Remove(lex);
+                    dictionnaires.Add(lex);
+                    _dictionnaireBranche = true;
+                }
+                catch { }
+            }
+            if (erreur != null)
+            {
+                try { erreur.IgnoreAll(); }
+                catch { }
+            }
+            _editeur.Focus();
         }
 
         private void EditeurToucheEnfoncee(object expediteur, KeyEventArgs e)
