@@ -31,6 +31,10 @@ namespace Mentalo.Modele
         /// pastille-titre qui reçoit les liens venant de l'extérieur.</summary>
         public bool Plie { get; set; }
 
+        /// <summary>Rang dans le mode présentation (v0.17) ; 0 = ordre de lecture automatique
+        /// (de haut en bas, puis de gauche à droite).</summary>
+        public int OrdrePresentation { get; set; }
+
         public Groupe()
         {
             Id = Guid.NewGuid().ToString("N");

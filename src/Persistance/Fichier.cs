@@ -59,6 +59,8 @@ namespace Mentalo.Persistance
         public double? titreTaille { get; set; }
         // v15+
         public bool? plie { get; set; }
+        // v16+
+        public int? ordre { get; set; }
     }
 
     public class NoeudDto
@@ -138,7 +140,7 @@ namespace Mentalo.Persistance
         public const string Extension = ".tea";
         public const string FiltreOuverture = "Cartes Mental-o (*.tea;*.zeubi)|*.tea;*.zeubi|Tous les fichiers (*.*)|*.*";
         public const string FiltreEnregistrement = "Carte Mental-o (*.tea)|*.tea|Tous les fichiers (*.*)|*.*";
-        private const int VersionFormat = 15; // … v13 tracés/étiquettes de liens + ombres/opacité ; v14 fichiers attachés ; v15 notes, étiquettes, groupes pliés
+        private const int VersionFormat = 16; // … v14 fichiers attachés ; v15 notes, étiquettes, groupes pliés ; v16 ordre de présentation des groupes
 
         /// <summary>Le nom d'entrée d'un fichier intégré dans l'archive.</summary>
         private static string EntreeFichier(PieceJointe piece)
@@ -258,6 +260,7 @@ namespace Mentalo.Persistance
                 if (!string.IsNullOrEmpty(g.TitreFond)) gd.titreFond = g.TitreFond;
                 gd.titreTaille = g.TitreTaille;
                 if (g.Plie) gd.plie = true;
+                if (g.OrdrePresentation > 0) gd.ordre = g.OrdrePresentation;
                 dto.groupes.Add(gd);
             }
             foreach (Lien l in document.Liens)
@@ -611,6 +614,7 @@ namespace Mentalo.Persistance
                     if (!string.IsNullOrEmpty(gd.titreFond)) g.TitreFond = gd.titreFond;
                     if (gd.titreTaille.HasValue) g.TitreTaille = gd.titreTaille.Value;
                     g.Plie = gd.plie == true;
+                    if (gd.ordre.HasValue && gd.ordre.Value > 0) g.OrdrePresentation = gd.ordre.Value;
                     document.Groupes.Add(g);
                 }
             }

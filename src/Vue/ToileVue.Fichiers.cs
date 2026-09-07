@@ -31,6 +31,13 @@ namespace Mentalo.Vue
             SignalerModification();
         }
 
+        /// <summary>Un fichier texte brut ou Markdown : déposé, il devient des boîtes (v0.17).</summary>
+        public static bool EstFichierTexte(string chemin)
+        {
+            string extension = System.IO.Path.GetExtension(chemin ?? "").ToLowerInvariant();
+            return extension == ".txt" || extension == ".md" || extension == ".markdown";
+        }
+
         /// <summary>Un fichier « non image » exploitable : existe et n'est pas un dossier.</summary>
         public static bool EstFichierAttachable(string chemin)
         {

@@ -104,6 +104,25 @@ namespace Mentalo.Historique
         public void Annuler() { _toile.DefinirPliageGroupe(_groupe, !_plie); }
     }
 
+    /// <summary>Rang d'un groupe dans le mode présentation (v0.17).</summary>
+    public class CommandeOrdrePresentationGroupe : ICommande
+    {
+        private readonly ToileVue _toile;
+        private readonly Groupe _groupe;
+        private readonly int _ancien, _nouveau;
+
+        public CommandeOrdrePresentationGroupe(ToileVue toile, Groupe groupe, int nouveau)
+        {
+            _toile = toile;
+            _groupe = groupe;
+            _ancien = groupe.OrdrePresentation;
+            _nouveau = nouveau;
+        }
+
+        public void Executer() { _toile.DefinirOrdrePresentation(_groupe, _nouveau); }
+        public void Annuler() { _toile.DefinirOrdrePresentation(_groupe, _ancien); }
+    }
+
     public class CommandeRedimensionnerGroupe : ICommande
     {
         private readonly ToileVue _toile;

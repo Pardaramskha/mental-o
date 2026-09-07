@@ -55,6 +55,15 @@ namespace Mentalo
         // Copies de secours (v0.16) : une clé par carte ouverte, une copie par minute si modifiée.
         private string _cleSecours = Secours.NouvelleCle();
         private bool _modifieDepuisSecours;
+
+        // Présentation (v0.17) : pointeur laser et compteur de diapositives ; modèles de cartes.
+        private Grid _zoneCentrale;
+        private Canvas _calqueLaser;
+        private Ellipse _laser;
+        private bool _laserActif;
+        private Border _compteurPresentation;
+        private TextBlock _compteurPresentationTexte;
+        private MenuItem _menuModeles;
         private static readonly RoutedCommand CmdGrouper = new RoutedCommand();
         private static readonly RoutedCommand CmdDegrouper = new RoutedCommand();
         private static readonly RoutedCommand CmdModeAuto = new RoutedCommand();
@@ -168,6 +177,7 @@ namespace Mentalo
             DockPanel.SetDock(_barreEtat, Dock.Bottom);
             racine.Children.Add(_barreEtat);
             Grid zoneCentrale = new Grid();
+            _zoneCentrale = zoneCentrale;
             zoneCentrale.Children.Add(_toile);
             _vignette = ConstruireVignette();
             zoneCentrale.Children.Add(_vignette);
@@ -183,6 +193,10 @@ namespace Mentalo
             zoneCentrale.Children.Add(_panneauHistorique);
             _panneauFiltre = ConstruirePanneauFiltre();
             zoneCentrale.Children.Add(_panneauFiltre);
+            _compteurPresentation = ConstruireCompteurPresentation();
+            zoneCentrale.Children.Add(_compteurPresentation);
+            _calqueLaser = ConstruireLaser();
+            zoneCentrale.Children.Add(_calqueLaser);
             racine.Children.Add(zoneCentrale);
             Content = racine;
             SelectionOnglet("texte");
@@ -193,6 +207,22 @@ namespace Mentalo
             BrancherCommandes();
             KeyDown += ToucheEnfoncee;
             KeyUp += ToucheRelachee;
+            // Création au clavier (v0.17) : Entrée = boîte sœur, Tab = boîte enfant — avant que
+            // Tab ne serve à la navigation entre contrôles.
+            PreviewKeyDown += delegate(object expediteur, KeyEventArgs e)
+            {
+                if (_presentation || Keyboard.FocusedElement is TextBoxBase || !_toile.IsKeyboardFocusWithin) return;
+                if (Keyboard.Modifiers != ModifierKeys.None) return;
+                if (e.Key == Key.Tab) { if (_toile.CreerBoiteEnfant()) e.Handled = true; }
+                else if (e.Key == Key.Enter) { if (_toile.CreerBoiteSoeur()) e.Handled = true; }
+            };
+            _toile.DiapositiveChangee += delegate(int courante, int total)
+            {
+                if (_compteurPresentationTexte == null) return;
+                _compteurPresentationTexte.Text = courante == 0
+                    ? (total == 0 ? "Vue d'ensemble" : "Vue d'ensemble · " + total + " diapositive" + (total > 1 ? "s" : "") + " — → pour commencer")
+                    : courante + " / " + total;
+            };
 
             _toile.VueChangee += MettreAJourMiniCarte;
             _toile.DocumentModifie += delegate
@@ -293,6 +323,9 @@ namespace Mentalo
 
             MenuItem fichier = new MenuItem { Header = "_Fichier" };
             fichier.Items.Add(Element("_Nouveau", ApplicationCommands.New, GesteDe("nouveau")));
+            _menuModeles = new MenuItem { Header = "Nouveau depuis un _modèle" };
+            RemplirMenuModeles();
+            fichier.Items.Add(_menuModeles);
             fichier.Items.Add(Element("_Ouvrir…", ApplicationCommands.Open, GesteDe("ouvrir")));
             _menuRecents = new MenuItem { Header = "Ouvrir les fichiers _récents" };
             RemplirMenuRecents();
@@ -314,6 +347,7 @@ namespace Mentalo
             AjouterActionMenu(exporter, "Dessin SVG…", delegate { ExporterSvg(); });
             AjouterActionMenu(exporter, "Texte Markdown…", delegate { ExporterMarkdown(); });
             AjouterActionMenu(exporter, "Plan OPML…", delegate { ExporterOpml(); });
+            AjouterActionMenu(exporter, "Canevas JSON Canvas (Obsidian…)…", delegate { ExporterCanvas(); });
             fichier.Items.Add(exporter);
             MenuItem importerPuces = new MenuItem
             {
@@ -329,6 +363,13 @@ namespace Mentalo
             };
             importerOpml.Click += delegate { ImporterOpml(); };
             fichier.Items.Add(importerOpml);
+            MenuItem importerCanvas = new MenuItem
+            {
+                Header = "Importer un canevas _JSON Canvas…",
+                ToolTip = "Le format ouvert d'Obsidian Canvas (.canvas) : cartes, fichiers, liens web, groupes et flèches"
+            };
+            importerCanvas.Click += delegate { ImporterCanvas(); };
+            fichier.Items.Add(importerCanvas);
             fichier.Items.Add(Element("Im_primer…", CmdImprimer, GesteDe("imprimer")));
             fichier.Items.Add(new Separator());
             MenuItem preferences = new MenuItem { Header = "Préférences de _fichier…" };
@@ -338,6 +379,26 @@ namespace Mentalo
             parametres.Click += delegate { OuvrirParametres(); };
             fichier.Items.Add(parametres);
             fichier.Items.Add(new Separator());
+            MenuItem themes = new MenuItem
+            {
+                Header = "_Thème de la carte",
+                ToolTip = "Fond, texte et styles par défaut assortis ; au choix, appliqués aussi aux éléments existants"
+            };
+            foreach (ThemeCarte theme in ThemeCarte.Liste())
+            {
+                ThemeCarte choix = theme;
+                MenuItem element = new MenuItem { Header = theme.Nom, ToolTip = theme.Description };
+                element.Icon = new Border
+                {
+                    Width = 14, Height = 14, CornerRadius = new CornerRadius(3),
+                    Background = new SolidColorBrush(TexteRiche.CouleurDepuis(theme.FondCouleur, Colors.White)),
+                    BorderBrush = new SolidColorBrush(TexteRiche.CouleurDepuis(theme.Boite.BordureCouleur, Colors.Gray)),
+                    BorderThickness = new Thickness(1.5)
+                };
+                element.Click += delegate { AppliquerTheme(choix); };
+                themes.Items.Add(element);
+            }
+            fichier.Items.Add(themes);
             MenuItem associer = new MenuItem
             {
                 Header = "_Associer les fichiers .tea à Mental-o",
@@ -398,6 +459,15 @@ namespace Mentalo
                 ToolTip = "Range les boîtes sélectionnées en colonne, centres alignés"
             };
             edition.Items.Add(empiler);
+            MenuItem ranger = new MenuItem
+            {
+                Header = "_Ranger en arbre",
+                ToolTip = "Dispose la sélection (ou toute la carte) en arbre suivant les liens ; la racine garde sa place"
+            };
+            AjouterActionMenu(ranger, "Horizontal (racine à gauche)", delegate { _toile.RangerEnArbre("horizontal"); });
+            AjouterActionMenu(ranger, "Vertical (racine en haut)", delegate { _toile.RangerEnArbre("vertical"); });
+            AjouterActionMenu(ranger, "Radial (racine au centre)", delegate { _toile.RangerEnArbre("radial"); });
+            edition.Items.Add(ranger);
             menu.Items.Add(edition);
 
             MenuItem insertion = new MenuItem { Header = "_Insertion" };
@@ -461,7 +531,10 @@ namespace Mentalo
             aPropos.Click += delegate
             {
                 DialogueMessage.Afficher(this,
-                    "Mental-o — v0.16\n\nLogiciel de carte mentale, simple et léger.\n\n" +
+                    "Mental-o — v0.17\n\nLogiciel de carte mentale, simple et léger.\n\n" +
+                    "Clavier : Entrée = boîte sœur, Tab = boîte enfant reliée · Édition > Ranger en arbre (horizontal, vertical, radial)\n" +
+                    "Présentation (F5) : chaque groupe est une diapositive (→ / ← / Début, L = pointeur laser, ordre au clic droit sur le cadre)\n" +
+                    "Fichier > Nouveau depuis un modèle, Thème de la carte (6 thèmes assortis), Exporter/Importer JSON Canvas (Obsidian) · dépôt de .txt/.md\n" +
                     "Confiance : copie de secours chaque minute (récupération proposée au démarrage suivant), Fichier > Versions antérieures\n" +
                     "Correcteur orthographique de Windows pendant la saisie (clic droit : corrections, ignorer, dictionnaire personnel ; Paramètres > Édition)\n" +
                     "Grandes cartes : Tout voir (Ctrl+Maj+0), zoom sur la sélection (Ctrl+Maj+1), Ctrl+A, Alt+rectangle = désélectionner\n" +
@@ -1735,6 +1808,16 @@ namespace Mentalo
         private void ToucheEnfoncee(object expediteur, KeyEventArgs e)
         {
             if (Keyboard.FocusedElement is TextBoxBase) return; // édition en cours : le clavier appartient à l'éditeur
+            if (_presentation)
+            {
+                // Diapositives (v0.17) : avancer, reculer, vue d'ensemble, pointeur laser.
+                if (e.Key == Key.Right || e.Key == Key.Down || e.Key == Key.PageDown || e.Key == Key.Space || e.Key == Key.Enter)
+                { _toile.PresentationSuivante(); e.Handled = true; return; }
+                if (e.Key == Key.Left || e.Key == Key.Up || e.Key == Key.PageUp || e.Key == Key.Back)
+                { _toile.PresentationPrecedente(); e.Handled = true; return; }
+                if (e.Key == Key.Home) { _toile.PresentationDebut(); e.Handled = true; return; }
+                if (e.Key == Key.L) { BasculerLaser(); e.Handled = true; return; }
+            }
             // Suppr passe désormais par les raccourcis re-liables (Fichier > Paramètres).
             if (e.Key == Key.Space)
             {
@@ -2192,6 +2275,9 @@ namespace Mentalo
             DefinirPleinEcran(true);
             MettreAJourMenusAffichage();
             _toile.Focus();
+            _compteurPresentation.Visibility = Visibility.Visible;
+            // La vue d'ensemble attend que le plein écran ait redimensionné la toile.
+            Dispatcher.BeginInvoke(new Action(delegate { _toile.PresentationDebut(); }), DispatcherPriority.Loaded);
         }
 
         private void QuitterPresentation()
@@ -2202,6 +2288,8 @@ namespace Mentalo
             _barreModes.Visibility = Visibility.Visible;
             _barreFormat.Visibility = Visibility.Visible;
             _barreEtat.Visibility = Visibility.Visible;
+            _compteurPresentation.Visibility = Visibility.Collapsed;
+            if (_laserActif) BasculerLaser();
             DefinirPleinEcran(false);
             _toile.DefinirMode(string.IsNullOrEmpty(_modeAvantPresentation) ? "automatique" : _modeAvantPresentation);
             MettreAJourBarreModes();
@@ -2212,6 +2300,198 @@ namespace Mentalo
         {
             if (_menuPleinEcran != null) _menuPleinEcran.IsChecked = _pleinEcran && !_presentation;
             if (_menuPresentation != null) _menuPresentation.IsChecked = _presentation;
+        }
+
+        // ------------------------------------------------------------------ présentation : laser et compteur (v0.17)
+
+        private Border ConstruireCompteurPresentation()
+        {
+            _compteurPresentationTexte = new TextBlock { Foreground = Chrome.TexteDoux, FontSize = 12 };
+            Border cadre = PanneauFlottant(HorizontalAlignment.Right, VerticalAlignment.Bottom, _compteurPresentationTexte);
+            cadre.Padding = new Thickness(10, 4, 10, 4);
+            cadre.Visibility = Visibility.Collapsed;
+            cadre.ToolTip = "→ / Espace : diapositive suivante · ← : précédente · Début : vue d'ensemble · L : pointeur laser · Échap : quitter";
+            return cadre;
+        }
+
+        /// <summary>Un point rouge lumineux qui suit la souris (touche L en présentation).</summary>
+        private Canvas ConstruireLaser()
+        {
+            Canvas calque = new Canvas { IsHitTestVisible = false, Visibility = Visibility.Collapsed };
+            _laser = new Ellipse
+            {
+                Width = 16, Height = 16,
+                Fill = new SolidColorBrush(Color.FromArgb(0xE6, 0xFF, 0x2D, 0x2D)),
+                Effect = new System.Windows.Media.Effects.DropShadowEffect
+                {
+                    Color = Color.FromRgb(0xFF, 0x2D, 0x2D), BlurRadius = 18, ShadowDepth = 0, Opacity = 0.9
+                }
+            };
+            calque.Children.Add(_laser);
+            _zoneCentrale.PreviewMouseMove += delegate(object expediteur, MouseEventArgs e)
+            {
+                if (!_laserActif) return;
+                Point p = e.GetPosition(_zoneCentrale);
+                Canvas.SetLeft(_laser, p.X - _laser.Width / 2);
+                Canvas.SetTop(_laser, p.Y - _laser.Height / 2);
+            };
+            return calque;
+        }
+
+        private void BasculerLaser()
+        {
+            _laserActif = !_laserActif;
+            _calqueLaser.Visibility = _laserActif ? Visibility.Visible : Visibility.Collapsed;
+            _toile.Cursor = _laserActif ? Cursors.None : null;
+            if (_laserActif)
+            {
+                Point p = Mouse.GetPosition(_zoneCentrale);
+                Canvas.SetLeft(_laser, p.X - _laser.Width / 2);
+                Canvas.SetTop(_laser, p.Y - _laser.Height / 2);
+            }
+        }
+
+        // ------------------------------------------------------------------ modèles de cartes (v0.17)
+
+        private void RemplirMenuModeles()
+        {
+            if (_menuModeles == null) return;
+            _menuModeles.Items.Clear();
+            List<string> modeles = Modeles.Lister();
+            if (modeles.Count == 0)
+                _menuModeles.Items.Add(new MenuItem { Header = "(aucun modèle — enregistrez une carte comme modèle)", IsEnabled = false });
+            foreach (string chemin in modeles)
+            {
+                string cible = chemin;
+                MenuItem element = new MenuItem { Header = Modeles.NomDe(chemin), ToolTip = chemin };
+                element.Click += delegate { NouveauDepuisModele(cible); };
+                _menuModeles.Items.Add(element);
+            }
+            _menuModeles.Items.Add(new Separator());
+            MenuItem enregistrer = new MenuItem
+            {
+                Header = "Enregistrer la carte actuelle comme modèle…",
+                ToolTip = "Défauts du fichier, thème, boîtes de départ : tout ce que contient la carte devient le point de départ des nouvelles"
+            };
+            enregistrer.Click += delegate { EnregistrerCommeModele(); };
+            _menuModeles.Items.Add(enregistrer);
+            MenuItem dossier = new MenuItem { Header = "Ouvrir le dossier des modèles" };
+            dossier.Click += delegate
+            {
+                try { System.Diagnostics.Process.Start("explorer.exe", "\"" + Modeles.Dossier() + "\""); }
+                catch { }
+            };
+            _menuModeles.Items.Add(dossier);
+        }
+
+        private void NouveauDepuisModele(string chemin)
+        {
+            if (!ConfirmerAbandon()) return;
+            try
+            {
+                DocumentCarte document = Fichier.Charger(chemin);
+                document.DateCreation = "";
+                document.DateModification = "";
+                NouvelleSessionSecours();
+                _toile.ChargerDocument(document);
+                _cheminFichier = null;
+                _modifie = false;
+                MettreAJourTitre();
+            }
+            catch (Exception ex)
+            {
+                DialogueMessage.Afficher(this, string.Format("Impossible d'ouvrir le modèle :\n{0}", ex.Message),
+                    "Mental-o", MessageBoxButton.OK, MessageBoxImage.Error);
+                RemplirMenuModeles();
+            }
+        }
+
+        private void EnregistrerCommeModele()
+        {
+            string suggestion = !string.IsNullOrWhiteSpace(_toile.Document.NomAffichage) ? _toile.Document.NomAffichage
+                : _cheminFichier != null ? System.IO.Path.GetFileNameWithoutExtension(_cheminFichier) : "Mon modèle";
+            string nom = DialogueSaisie.DemanderTexte(this, "Enregistrer comme modèle", "Nom du modèle :", suggestion);
+            if (string.IsNullOrWhiteSpace(nom)) return;
+            if (Modeles.Existe(nom.Trim()))
+            {
+                MessageBoxResult reponse = DialogueMessage.Afficher(this,
+                    string.Format("Un modèle « {0} » existe déjà. Le remplacer ?", nom.Trim()),
+                    "Modèles", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                if (reponse != MessageBoxResult.Yes) return;
+            }
+            try
+            {
+                Modeles.Enregistrer(_toile.Document, nom);
+                RemplirMenuModeles();
+            }
+            catch (Exception ex)
+            {
+                DialogueMessage.Afficher(this, string.Format("Impossible d'enregistrer le modèle :\n{0}", ex.Message),
+                    "Mental-o", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        // ------------------------------------------------------------------ thèmes de carte (v0.17)
+
+        private void AppliquerTheme(ThemeCarte theme)
+        {
+            bool carteVide = _toile.Document.Noeuds.Count == 0;
+            bool auxExistants = false;
+            if (!carteVide)
+            {
+                MessageBoxResult reponse = DialogueMessage.Afficher(this,
+                    string.Format("Appliquer le thème « {0} » ?\n{1}\n\nOui : aussi aux boîtes, liens et groupes existants (annulable).\nNon : seulement au fond et aux nouveaux éléments.",
+                        theme.Nom, theme.Description),
+                    "Thème de la carte", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+                if (reponse == MessageBoxResult.Cancel) return;
+                auxExistants = reponse == MessageBoxResult.Yes;
+            }
+            _toile.AppliquerThemeCarte(theme, auxExistants);
+            MettreAJourBarreFormat();
+        }
+
+        // ------------------------------------------------------------------ JSON Canvas (v0.17)
+
+        private void ExporterCanvas()
+        {
+            string chemin = DemanderCheminExport(JsonCanvas.Filtre, ".canvas");
+            if (chemin == null) return;
+            try
+            {
+                JsonCanvas.Exporter(_toile, chemin);
+            }
+            catch (Exception ex)
+            {
+                DialogueMessage.Afficher(this, string.Format("Export impossible :\n{0}", ex.Message),
+                    "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private void ImporterCanvas()
+        {
+            OpenFileDialog dialogue = new OpenFileDialog();
+            dialogue.Filter = JsonCanvas.Filtre;
+            dialogue.DefaultExt = ".canvas";
+            if (dialogue.ShowDialog(this) != true) return;
+            try
+            {
+                List<Noeud> noeuds;
+                List<Lien> liens;
+                List<Groupe> groupes;
+                JsonCanvas.Importer(dialogue.FileName, out noeuds, out liens, out groupes);
+                if (noeuds.Count == 0)
+                {
+                    DialogueMessage.Afficher(this, "Aucune carte exploitable dans ce canevas.",
+                        "Mental-o", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+                _toile.ImporterCanevas(noeuds, liens, groupes);
+            }
+            catch (Exception ex)
+            {
+                DialogueMessage.Afficher(this, string.Format("Import impossible :\n{0}", ex.Message),
+                    "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
 
         // ------------------------------------------------------------------ impression & PDF

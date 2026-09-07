@@ -537,7 +537,19 @@ namespace Mentalo.Persistance
                     else if (c == '\t') largeur += 4;
                     else break;
                 }
-                string contenu = RetirerMarqueur(brute.Trim());
+                string contenu;
+                string propre = brute.Trim();
+                int dieses = 0;
+                while (dieses < propre.Length && dieses < 6 && propre[dieses] == '#') dieses++;
+                if (dieses > 0 && dieses < propre.Length && propre[dieses] == ' ')
+                {
+                    // Titres Markdown (v0.17) : « # » coiffe tout, « ## » vient dessous… Une
+                    // largeur négative les classe avant toute indentation de puce.
+                    largeur = -1000 + dieses * 100;
+                    contenu = propre.Substring(dieses).Trim();
+                }
+                else
+                    contenu = RetirerMarqueur(propre);
                 if (contenu.Length == 0) continue;
                 lignes.Add(new KeyValuePair<int, string>(largeur, contenu));
                 largeurs.Add(largeur);

@@ -3015,6 +3015,15 @@ namespace Mentalo.Vue
             plier.Click += delegate { BasculerPliageGroupe(groupe); };
             menu.Items.Add(plier);
             menu.Items.Add(ConstruireMenuEtiquettes());
+            MenuItem ordre = new MenuItem
+            {
+                Header = groupe.OrdrePresentation > 0
+                    ? "Ordre dans la présentation… (" + groupe.OrdrePresentation + ")"
+                    : "Ordre dans la présentation…",
+                ToolTip = "En mode présentation (F5), chaque groupe est une diapositive ; sans rang, l'ordre de lecture s'applique"
+            };
+            ordre.Click += delegate { DemanderOrdrePresentation(groupe); };
+            menu.Items.Add(ordre);
 
             menu.Items.Add(new Separator());
             MenuItem degrouper = new MenuItem { Header = "Dégrouper", InputGestureText = "Ctrl+Maj+G" };
@@ -3183,10 +3192,24 @@ namespace Mentalo.Vue
             NoeudVisuel noeudCible = NoeudSousPoint(position);
             bool imageAttachee = false;
             double decalage = 0;
+            bool lierTexte = (e.KeyStates & DragDropKeyStates.AltKey) != 0; // Alt : lier un .txt/.md au lieu de l'importer
             foreach (string fichier in fichiers)
             {
                 bool image = ExtensionImageValide(fichier);
                 if (!image && !EstFichierAttachable(fichier)) continue; // dossiers, cibles disparues
+                if (!image && !lierTexte && EstFichierTexte(fichier) && _mode != "lecture")
+                {
+                    // Un .txt / .md déposé devient des boîtes (plan → arbre) ; Alt pour le lier.
+                    string texte;
+                    try { texte = File.ReadAllText(fichier); }
+                    catch { texte = null; }
+                    if (texte != null)
+                    {
+                        DeposerTexte(texte, null, new Point(position.X + decalage, position.Y + decalage));
+                        decalage += 24;
+                        continue;
+                    }
+                }
                 if (noeudCible != null)
                 {
                     if (image)
