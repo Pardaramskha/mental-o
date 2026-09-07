@@ -1,0 +1,8 @@
+{
+  "id": "mental-o",
+  "nom": "Mental-o",
+  "description": "Carte mentale libre à la Scapple : boîtes de texte riche, liens droits/courbes, groupes, images et fichiers attachés, export PNG/PDF/SVG/Markdown/OPML. Fichiers .tea.",
+  "logo": "ressources/logo.png",
+  "exe": "Mental-o.exe",
+  "motsCles": ["mind map", "carte mentale", "idées", "brainstorm", "notes", "schéma", "scapple", "tea"]
+}
