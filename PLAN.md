@@ -267,8 +267,87 @@ Ces points rejoignent le vivier du §6 ; le reste du §6 (mini-carte évoluée, 
 calques, hyperliens/notes cachées, plier les groupes…) est constitué de fonctions que
 Scapple n'a même pas — c'est là que Mental-o creuse son propre sillon. 🍵
 
-## 8. Journal
+## 8. Tour d'horizon des logiciels du genre (07/09/2026)
 
+> Où en est Mental-o (v0.14) face au vivier du §6, et ce que font les autres — outils de
+> canevas libre (Scapple 1.4.2 Win / 1.5.4 Mac, Obsidian Canvas + format ouvert JSON
+> Canvas, Heptabase, Milanote, Excalidraw) et arbres classiques (Freeplane, SimpleMind,
+> MindNode, XMind) — d'après leurs pages officielles, notes de version et revues 2026.
+> Objectif : repérer ce qui manque pour en faire quelque chose de plus solide, pas copier.
+
+### Pointage du vivier §6 à la v0.14
+
+| Rubrique | Livré | Reste |
+|---|---|---|
+| Confort d'édition | copier/coller/dupliquer, magnétisme + guides, aligner/distribuer, recherche, navigation clavier, styles favoris, empiler | raccourcis 1-9 des favoris |
+| Liens | étiquettes, courbes + équerre, liens de groupes, insertion au milieu | — |
+| Apparence | fond couleur + motifs, mode sombre, ombres, opacité, défauts par fichier | bordure différente par côté, image de fond |
+| Grandes cartes | mini-carte, inspecteur, historique | **plier/déplier un groupe, zoom sélection / tout voir, tags + filtre, calques** |
+| Contenu | images, **fichiers attachés intégrables au .tea (v0.14)** | **hyperliens web dans une boîte, notes cachées** |
+| Import / export | PNG, SVG, PDF, Markdown, OPML (2 sens), texte à puces, impression | dépôt direct de .txt/.md |
+| Système | sauvegarde auto 3 min, récents, `.tea`, association, mode présentation, mode lecture (= « verrouillé ») | **récupération après plantage**, installeur, onglets/multi-fenêtres, correcteur |
+| Modes | automatique, déplacement, liens, lecture, présentation | mode chaîne (prise de notes au clavier) |
+
+Le §6 est livré aux deux tiers ; ce qui reste est concentré sur l'**organisation des grandes
+cartes** et la **robustesse système** — exactement ce que le marché confirme ci-dessous.
+
+### Ce que font les autres et que Mental-o n'a pas
+
+| Fonction | Qui l'a | Intérêt pour Mental-o |
+|---|---|---|
+| **Zoom pour tout voir / sur la sélection** | Obsidian (Maj+1 / Maj+2), Scapple (touche Z), tous | Évident, trivial, attendu partout |
+| **Plier/déplier** (branche, groupe, section) | Freeplane, SimpleMind, MindNode, XMind, Heptabase (sections) | Seule vraie arme contre les grandes cartes ; nos groupes titrés s'y prêtent (réduire à la pastille-titre) |
+| **Notes cachées** par boîte (infobulle, icône discrète) | SimpleMind, MindNode, XMind, Freeplane (notes + détails) | Garder la carte aérée sans perdre le détail ; complète les fichiers attachés |
+| **Hyperliens web** cliquables (carte-lien avec aperçu chez Obsidian, « web links » XMind) | Obsidian, XMind, Freeplane, Milanote | Le rail « fichiers » de la v0.14 accueille naturellement une variante URL |
+| **Lien vers une autre boîte** (ancre interne, « topic link ») | XMind, MindNode (cross-document), Obsidian | Navigation dans une grosse carte ; Ctrl+clic → recentrer sur la cible |
+| **Tags / étiquettes visuelles + filtre** | MindNode (visual tags), Freeplane (filtres sauvegardés), XMind (labels), Heptabase | Classer sans hiérarchie ; le filtre estompe le reste (« focus mode » MindNode) |
+| **Cases à cocher / tâches + progression** | SimpleMind (cases + barres), MindNode (tâches), XMind (to-do, Gantt) | Une puce « ☐ » cliquable dans nos listes, progression par groupe |
+| **Icônes / marqueurs / stickers** sur les boîtes | tous les arbres classiques, MindNode (250 stickers), Freeplane | Repère visuel rapide ; nos SVG Phosphor embarqués font déjà le socle |
+| **Vue plan (outline)** synchronisée avec la carte | Freeplane, SimpleMind, MindNode, XMind | Notre export Markdown calcule déjà l'arbre par liens : l'afficher en panneau et le rendre cliquable |
+| **Ranger en arbre** (auto-disposition d'une sélection : radial, horizontal, vertical) | SimpleMind (7 modes), MindNode, XMind, Whimsical | Complément d'« Empiler » : ranger un sous-arbre d'un clic, sans renoncer au placement libre |
+| **Création au clavier** (Entrée = sœur, Tab = enfant lié) | Whimsical, XMind, Freeplane, Scapple (raccourcis étendus) | C'est notre « mode chaîne » du §6 ; le geste clavier vaut mieux qu'un mode |
+| **Récupération après plantage** (cartes non enregistrées restaurées) | Scapple 1.4 (« restoration of previously-open unsaved boards »), Obsidian, Heptabase | Condition de la confiance ; on a l'autosave, pas le filet |
+| **Correcteur orthographique** | Scapple (Hunspell), Freeplane, XMind | Dernier manque face à Scapple ; Marabook embarque déjà Hunspell + dictionnaires |
+| **Historique de versions** | Coggle (illimité), Heptabase, Milanote | Snapshots légers dans le .tea (modèle Marabook), « revenir à hier » |
+| **Format d'échange ouvert JSON Canvas** (`.canvas`) | Obsidian, Kinopio, Kosmik… | Nœuds text/file/link/group + arêtes avec côtés, flèches, couleur, étiquette : correspondance quasi directe avec boîtes/fichiers/groupes/liens — import **et** export à portée |
+| **Modèles de cartes + thèmes assortis** | XMind (templates, thèmes), SimpleMind (15 feuilles de style), Milanote, Whimsical | Un .tea vierge « modèle » + thèmes fond/boîte/lien/groupe cohérents |
+| **Présentation par diapositives** (cadres → slides, pointeur laser) | Excalidraw (frames + laser), XMind (Pitch), MindMeister | Nos groupes = diapositives, F5 enchaîne ; le pointeur laser est un gadget de présentation apprécié |
+| **Dépôt direct de fichiers texte** (txt/md/odt → boîtes) | Scapple (txt, RTF, ODT, PDF) | Petit ; le dépôt .txt était déjà noté au §7 |
+| **Gestes de sélection** : Ctrl+A, Alt+rectangle pour désélectionner, Alt+glisser = dupliquer, Maj = contraindre l'axe, Ctrl+flèches = déplacer | Scapple 1.4, Obsidian | Finitions bon marché |
+| Formes d'arrière-plan « aimantées » | Scapple | Couvert par nos groupes (voir §7) |
+| Équations LaTeX, notes audio, IA, collaboration temps réel, cloud/mobile, clipper web | XMind, MindNode, Heptabase, Miro… | **Hors périmètre** : Mental-o est local, léger, sans compte |
+
+### Ce que Mental-o fait déjà mieux (à préserver)
+
+Texte riche par sélection et alignement par ligne (personne d'autre dans les canevas
+libres), liens courbes/équerre avec poignée, liens depuis un cadre, modes d'interaction,
+raccourcis re-liables avec profils, défauts par fichier pour boîtes/liens/groupes, export
+SVG et import OPML (que Scapple n'a toujours pas), fichiers attachés **intégrables** au
+document (Obsidian et Heptabase ne font que référencer), mini-carte/inspecteur/historique,
+et un exe de quelques centaines de Ko sans dépendance.
+
+### Recommandation — dix chantiers, par valeur décroissante
+
+1. **Zoom pour tout voir / sur la sélection** (+ Ctrl+A, Alt+rectangle) — une soirée, attendu par tous.
+2. **Plier/déplier un groupe** en pastille-titre (liens redirigés vers la pastille, état enregistré).
+3. **Notes cachées + hyperliens web** dans une boîte, sur le rail des fichiers attachés de la v0.14 (URL = PieceJointe sans octets ; note = champ texte, icône coin, infobulle, dialogue d'édition).
+4. **Tags de couleur + filtre estompant** (panneau Fenêtres, recherche existante réutilisée) ; « focus » sur la sélection.
+5. **Cases à cocher** cliquables dans les listes (puce « ☐/☑ » de PucesTexte) + progression affichée dans le titre de groupe.
+6. **Récupération après plantage** : copie de secours horodatée dans %APPDATA% à chaque autosave, proposée au démarrage suivant ; puis versions légères dans le .tea.
+7. **Correcteur orthographique** (Hunspell + dictionnaire fr repris de Marabook, soulignement dans l'éditeur, clic droit = suggestions).
+8. **Import/export JSON Canvas** (Obsidian & co) + dépôt direct de .txt/.md (titres/puces → arbre) ; FreeMind .mm si l'OPML ne suffit pas.
+9. **Création au clavier** (Entrée = boîte sœur, Tab = boîte enfant liée, dans l'axe libre) + **Ranger en arbre** (disposition automatique d'une sélection : horizontal / vertical / radial).
+10. **Présentation par groupes** (chaque groupe = une diapositive, ordre réglable, pointeur laser) + **modèles de cartes** et **thèmes assortis**.
+
+Système v1.0 (inchangé) : installeur auto-extracteur (celui de Gallerizz est réutilisable),
+onglets ou multi-fenêtres, mise à jour signalée. Les points 1 à 5 forment une v0.15
+« grandes cartes » cohérente ; 6 et 7 une v0.16 « confiance » ; 8 à 10 la v0.17 avant la v1.0.
+
+> Sources : [Scapple 1.4 for Windows](https://www.literatureandlatte.com/latest/scapple-1-4-for-windows), [notes de version Scapple](https://www.literatureandlatte.com/scapple/release-notes?os=Windows), [Scapple 1.5.4 macOS](https://forum.literatureandlatte.com/t/scapple-1-5-4-for-macos-released/152204), [Obsidian Canvas](https://obsidian.md/help/plugins/canvas), [JSON Canvas 1.0](https://jsoncanvas.org/spec/1.0/), [Freeplane](https://docs.freeplane.org/), [SimpleMind](https://simplemind.eu/features/), [MindNode](https://www.mindnode.com/features), [Xmind](https://xmind.com/features/), [Milanote](https://milanote.com/product), [Heptabase](https://heptabase.com/), [Excalidraw+](https://plus.excalidraw.com/), [Storyflow — mind mapping tools 2026](https://storyflow.so/blog/best-mind-mapping-tools-2025), [Zapier — best mind mapping software 2026](https://zapier.com/blog/best-mind-mapping-software/), [Heptabase alternatives 2026](https://storyflow.so/blog/best-heptabase-alternatives-2026).
+
+## 9. Journal
+
+- **07/09/2026** — **v0.14 livrée** : DialogueMessage (dialogues au thème, visuels Marabook) remplace les MessageBox ; **fichiers attachés** aux boîtes (menu Insertion, dépôt, clic droit ; lien à la ligne avec icône ; ouvrir/renommer/remplacer/**intégrer au .tea**/copie/détacher/supprimer ; format v14) ; nouvelle icône, en-tête du README, manifeste Stargazer. **§8 ajouté** : tour d'horizon du marché et dix chantiers priorisés vers la v1.0.
 - **31/07/2026** — Plan validé, décisions actées. Démarrage de la v0.1.
 - **31/07/2026** — **v0.1 livrée** : canevas (pan/zoom), création de boîtes au double-clic, édition du texte, déplacement, suppression, sélection, enregistrement/ouverture `.zeubi`, annuler/rétablir (bonus anticipé de la v0.7). Compilé avec csc, exe de 31 Ko. Prochaine étape : v0.2 (liens par poignées draggables).
 - **31/07/2026** — **v0.2 livrée** : poignée bleue au survol d'une boîte → tirer vers une autre boîte pour créer un lien (surbrillance verte de la cible, doublons refusés) ; clic droit sur un lien → style (8 couleurs, 4 épaisseurs, plein/tirets/pointillé, flèches simple/double) ; sélection et suppression des liens ; suppression d'une boîte = suppression de ses liens (restaurés par Ctrl+Z) ; format `.zeubi` v2 (rétrocompatible v1). Bonus : icônes générées (`outils\generer-icones.bat`), icône embarquée dans l'exe, association `.zeubi` (`outils\associer-zeubi.bat` / `dissocier-zeubi.bat`). Prochaine étape : v0.3 (texte riche).
