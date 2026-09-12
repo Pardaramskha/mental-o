@@ -86,6 +86,11 @@ namespace Mentalo
         private Border _barreModes, _barreEtat;
         private MenuItem _menuPleinEcran, _menuPresentation;
 
+        // Mises à jour (menu Aide) : la version trouvée au lancement, s'il y en a une plus récente
+        private MenuItem _menuAide, _menuVerifierMaj;
+        private MiseAJour.Info _maj;
+        private readonly TextBlock _texteMaj = new TextBlock();
+
         // Barre de recherche
         private Border _barreRecherche;
         private TextBox _champRecherche;
@@ -257,7 +262,7 @@ namespace Mentalo
                 }
             };
             secours.Start();
-            Loaded += delegate { ProposerRecuperation(); };
+            Loaded += delegate { ProposerRecuperation(); VerifierMisesAJourEnFond(); };
 
             _texteZoom.Text = "Zoom : 100 %";
             MettreAJourBarreFormat();
@@ -526,12 +531,21 @@ namespace Mentalo
             fenetres.Items.Add(_menuFiltre);
             menu.Items.Add(fenetres);
 
-            MenuItem aide = new MenuItem { Header = "_?" };
+            _menuAide = new MenuItem { Header = "_Aide" };
+            _menuVerifierMaj = new MenuItem
+            {
+                Header = "_Vérifier les mises à jour…",
+                ToolTip = "Va chercher la dernière version publiée sur GitHub et l'installe sur place"
+            };
+            _menuVerifierMaj.Click += delegate { VerifierMisesAJour(); };
+            _menuAide.Items.Add(_menuVerifierMaj);
+            _menuAide.Items.Add(new Separator());
             MenuItem aPropos = new MenuItem { Header = "À _propos de Mental-o…" };
             aPropos.Click += delegate
             {
                 DialogueMessage.Afficher(this,
-                    "Mental-o — v0.17\n\nLogiciel de carte mentale, simple et léger.\n\n" +
+                    "Mental-o " + MiseAJour.VersionLocale() + "\n\nLogiciel de carte mentale, simple et léger.\n" +
+                    "Une application de la famille Stargazer, par Rémi Escamilla — github.com/" + MiseAJour.Depot + "\n\n" +
                     "Clavier : Entrée = boîte sœur, Tab = boîte enfant reliée · Édition > Ranger en arbre (horizontal, vertical, radial)\n" +
                     "Présentation (F5) : chaque groupe est une diapositive (→ / ← / Début, L = pointeur laser, ordre au clic droit sur le cadre)\n" +
                     "Fichier > Nouveau depuis un modèle, Thème de la carte (6 thèmes assortis), Exporter/Importer JSON Canvas (Obsidian) · dépôt de .txt/.md\n" +
@@ -544,10 +558,71 @@ namespace Mentalo
                     "Crédits à Gruffystudio de FlatIcon.com pour l'icône de l'app.",
                     "À propos de Mental-o", MessageBoxButton.OK, MessageBoxImage.Information);
             };
-            aide.Items.Add(aPropos);
-            menu.Items.Add(aide);
+            _menuAide.Items.Add(aPropos);
+            menu.Items.Add(_menuAide);
 
             return menu;
+        }
+
+        // ------------------------------------------------------------------ mises à jour
+
+        /// <summary>Au lancement : vérification silencieuse en arrière-plan ; s'il existe plus
+        /// récent, le menu Aide porte un point et la barre d'état le dit. Toute erreur (hors
+        /// ligne, dépôt sans release) est tue.</summary>
+        private void VerifierMisesAJourEnFond()
+        {
+            System.Threading.Thread fil = new System.Threading.Thread(delegate()
+            {
+                MiseAJour.Info info;
+                try { info = MiseAJour.Verifier(); }
+                catch { return; }
+                if (!MiseAJour.PlusRecente(info.Version, MiseAJour.VersionLocale())) return;
+                try
+                {
+                    Dispatcher.BeginInvoke(new Action(delegate
+                    {
+                        _maj = info;
+                        _menuAide.Header = "_Aide  ●";
+                        _menuAide.Foreground = DialogueMiseAJour.Or;
+                        _menuVerifierMaj.Header = "_Installer la version " + info.Version + "…";
+                        _texteMaj.Text = "Mental-o " + info.Version + " est disponible — menu Aide";
+                        _texteMaj.Visibility = Visibility.Visible;
+                    }));
+                }
+                catch { }
+            });
+            fil.IsBackground = true;
+            fil.Start();
+        }
+
+        /// <summary>Aide > Vérifier les mises à jour : interroge GitHub (sauf si le lancement a
+        /// déjà trouvé une version), puis propose de l'installer. Si l'archive est prête,
+        /// l'application se ferme (en proposant d'enregistrer) et le script la relance à neuf.</summary>
+        private void VerifierMisesAJour()
+        {
+            MiseAJour.Info info = _maj;
+            if (info == null)
+            {
+                Cursor = Cursors.Wait;
+                try { info = MiseAJour.Verifier(); }
+                catch (Exception ex)
+                {
+                    Cursor = null;
+                    DialogueMessage.Afficher(this, "Impossible de vérifier les mises à jour : " + ex.Message,
+                        "Mises à jour", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+                Cursor = null;
+                if (!MiseAJour.PlusRecente(info.Version, MiseAJour.VersionLocale()))
+                {
+                    DialogueMessage.Afficher(this, "Vous avez la dernière version de Mental-o (" +
+                        MiseAJour.VersionLocale() + ").", "Mises à jour",
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+            }
+            if (DialogueMiseAJour.Proposer(this, info))
+                Close();
         }
 
         private static void AjouterActionMenu(MenuItem parent, string entete, RoutedEventHandler action)
@@ -1662,6 +1737,14 @@ namespace Mentalo
             DockPanel contenu = new DockPanel { LastChildFill = false };
             DockPanel.SetDock(_texteZoom, Dock.Right);
             contenu.Children.Add(_texteZoom);
+            // À gauche, la mise à jour disponible (vide sinon) — cliquable
+            _texteMaj.Margin = new Thickness(8, 3, 8, 3);
+            _texteMaj.Foreground = DialogueMiseAJour.Or;
+            _texteMaj.Cursor = Cursors.Hand;
+            _texteMaj.Visibility = Visibility.Collapsed;
+            _texteMaj.MouseLeftButtonUp += delegate { VerifierMisesAJour(); };
+            DockPanel.SetDock(_texteMaj, Dock.Left);
+            contenu.Children.Add(_texteMaj);
 
             Border bordure = new Border();
             bordure.BorderThickness = new Thickness(0, 1, 0, 0);

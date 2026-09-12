@@ -7,3 +7,7 @@ Mental-o.exe
 
 # Notes personnelles de Rémi (hors dépôt)
 FEATURES.md
+TEXTES-UI.md
+
+# Ce qui part en release GitHub (outils\release.ps1 le régénère)
+dist/
