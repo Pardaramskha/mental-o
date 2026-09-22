@@ -73,6 +73,14 @@ namespace Mentalo.Vue
             return true;
         }
 
+        /// <summary>Une boîte libre à cette position du canevas (le bouton
+        /// « Nouvelle boîte » d'un hôte, 22/09/2026) — comme le double-clic.</summary>
+        public void CreerBoiteLibre(Point position)
+        {
+            if (_mode == "lecture") return;
+            CreerBoiteLiee(null, position);
+        }
+
         private void CreerBoiteLiee(Noeud parent, Point position)
         {
             Noeud noeud = new Noeud();
