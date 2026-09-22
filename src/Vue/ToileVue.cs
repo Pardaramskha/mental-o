@@ -2223,7 +2223,7 @@ namespace Mentalo.Vue
             string forme = StyleBoite.Depuis(_selection.Modele).Serialiser();
             if (Mentalo.Parametres.ParametresGlobaux.StylesFavoris.Contains(forme)) return;
             Mentalo.Parametres.ParametresGlobaux.StylesFavoris.Add(forme);
-            Mentalo.Parametres.ParametresGlobaux.Enregistrer();
+            Hote.EnregistrerParametres();
         }
 
         /// <summary>Applique un style favori à toutes les boîtes sélectionnées (une seule annulation).</summary>
@@ -3078,7 +3078,7 @@ namespace Mentalo.Vue
                 FileInfo informations = new FileInfo(chemin);
                 if (informations.Length > TailleImageMax)
                 {
-                    DialogueMessage.Afficher(Window.GetWindow(this),
+                    Hote.Message(Window.GetWindow(this),
                         string.Format("« {0} » dépasse la limite de 5 Mo ({1:0.0} Mo).",
                             informations.Name, informations.Length / 1048576.0),
                         "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -3089,7 +3089,7 @@ namespace Mentalo.Vue
             }
             catch (Exception ex)
             {
-                DialogueMessage.Afficher(Window.GetWindow(this),
+                Hote.Message(Window.GetWindow(this),
                     string.Format("Impossible d'importer l'image :\n{0}", ex.Message),
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -3100,7 +3100,7 @@ namespace Mentalo.Vue
             if (_mode == "lecture") return;
             if (donnees.LongLength > TailleImageMax)
             {
-                DialogueMessage.Afficher(Window.GetWindow(this), "L'image dépasse la limite de 5 Mo.",
+                Hote.Message(Window.GetWindow(this), "L'image dépasse la limite de 5 Mo.",
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
@@ -3111,7 +3111,7 @@ namespace Mentalo.Vue
             }
             catch
             {
-                DialogueMessage.Afficher(Window.GetWindow(this), "Format d'image illisible.",
+                Hote.Message(Window.GetWindow(this), "Format d'image illisible.",
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
@@ -3161,7 +3161,7 @@ namespace Mentalo.Vue
             }
             catch (Exception ex)
             {
-                DialogueMessage.Afficher(Window.GetWindow(this),
+                Hote.Message(Window.GetWindow(this),
                     string.Format("Impossible de coller l'image :\n{0}", ex.Message),
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -3364,7 +3364,7 @@ namespace Mentalo.Vue
                 FileInfo informations = new FileInfo(chemin);
                 if (informations.Length > TailleImageMax)
                 {
-                    DialogueMessage.Afficher(Window.GetWindow(this),
+                    Hote.Message(Window.GetWindow(this),
                         string.Format("« {0} » dépasse la limite de 5 Mo ({1:0.0} Mo).",
                             informations.Name, informations.Length / 1048576.0),
                         "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -3379,7 +3379,7 @@ namespace Mentalo.Vue
             }
             catch (Exception ex)
             {
-                DialogueMessage.Afficher(Window.GetWindow(this),
+                Hote.Message(Window.GetWindow(this),
                     string.Format("Impossible d'importer l'image :\n{0}", ex.Message),
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -3836,7 +3836,7 @@ namespace Mentalo.Vue
                             if (indice < Mentalo.Parametres.ParametresGlobaux.StylesFavoris.Count)
                             {
                                 Mentalo.Parametres.ParametresGlobaux.StylesFavoris.RemoveAt(indice);
-                                Mentalo.Parametres.ParametresGlobaux.Enregistrer();
+                                Hote.EnregistrerParametres();
                             }
                         };
                         retirer.Items.Add(element);

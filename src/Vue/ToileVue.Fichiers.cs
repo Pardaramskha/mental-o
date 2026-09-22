@@ -135,7 +135,7 @@ namespace Mentalo.Vue
 
         private void SignalerFichierIntrouvable(string chemin)
         {
-            DialogueMessage.Afficher(Window.GetWindow(this),
+            Hote.Message(Window.GetWindow(this),
                 string.Format("« {0} » n'existe pas ou n'est pas un fichier.", chemin),
                 "Mental-o", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
@@ -287,7 +287,7 @@ namespace Mentalo.Vue
             }
             catch (Exception ex)
             {
-                DialogueMessage.Afficher(Window.GetWindow(this),
+                Hote.Message(Window.GetWindow(this),
                     string.Format("Impossible d'ouvrir le fichier :\n{0}", ex.Message),
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -314,7 +314,7 @@ namespace Mentalo.Vue
             }
             catch (Exception ex)
             {
-                DialogueMessage.Afficher(Window.GetWindow(this),
+                Hote.Message(Window.GetWindow(this),
                     string.Format("Impossible d'ouvrir l'emplacement :\n{0}", ex.Message),
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -352,7 +352,7 @@ namespace Mentalo.Vue
             if (!EstFichierAttachable(chemin))
             {
                 if (ExtensionImageValide(chemin))
-                    DialogueMessage.Afficher(Window.GetWindow(this),
+                    Hote.Message(Window.GetWindow(this),
                         "Une image ne se lie pas : utilisez « Insérer une image dans la boîte… ».",
                         "Mental-o", MessageBoxButton.OK, MessageBoxImage.Information);
                 else
@@ -386,7 +386,7 @@ namespace Mentalo.Vue
                 FileInfo informations = new FileInfo(chemin);
                 if (informations.Length > TailleFichierAvertissement)
                 {
-                    MessageBoxResult reponse = DialogueMessage.Afficher(Window.GetWindow(this),
+                    MessageBoxResult reponse = Hote.Message(Window.GetWindow(this),
                         string.Format("« {0} » pèse {1:0.0} Mo : l'intégrer alourdira d'autant le fichier .tea.\n\nContinuer ?",
                             informations.Name, informations.Length / 1048576.0),
                         "Mental-o", MessageBoxButton.YesNo, MessageBoxImage.Question);
@@ -396,7 +396,7 @@ namespace Mentalo.Vue
             }
             catch (Exception ex)
             {
-                DialogueMessage.Afficher(Window.GetWindow(this),
+                Hote.Message(Window.GetWindow(this),
                     string.Format("Impossible de lire le fichier :\n{0}", ex.Message),
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Error);
                 return null;
@@ -448,7 +448,7 @@ namespace Mentalo.Vue
             }
             catch (Exception ex)
             {
-                DialogueMessage.Afficher(Window.GetWindow(this),
+                Hote.Message(Window.GetWindow(this),
                     string.Format("Impossible d'enregistrer la copie :\n{0}", ex.Message),
                     "Mental-o", MessageBoxButton.OK, MessageBoxImage.Error);
             }

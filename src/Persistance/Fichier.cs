@@ -162,15 +162,36 @@ namespace Mentalo.Persistance
         /// <summary>« avecVersions » faux = copie de secours : ni horodatage ni historique.</summary>
         public static void Enregistrer(DocumentCarte document, string chemin, bool avecVersions)
         {
+            // L'ancien document.json et les versions déjà présentes sont relus avant d'écraser.
+            List<KeyValuePair<string, byte[]>> versions = avecVersions ? RelireVersions(chemin) : new List<KeyValuePair<string, byte[]>>();
+            using (FileStream flux = new FileStream(chemin, FileMode.Create))
+                Ecrire(document, flux, avecVersions, versions);
+        }
+
+        /// <summary>Le .tea en mémoire (22/09/2026 — une carte vit dans le .plot de
+        /// Marabook) : les octets de l'archive, avec l'historique des versions
+        /// relu depuis les octets précédents (null = première écriture).</summary>
+        public static byte[] EnregistrerEnMemoire(DocumentCarte document, byte[] precedent)
+        {
+            List<KeyValuePair<string, byte[]>> versions = new List<KeyValuePair<string, byte[]>>();
+            if (precedent != null && precedent.Length > 0)
+                using (MemoryStream source = new MemoryStream(precedent))
+                    versions = RelireVersions(source, DateTime.Now);
+            using (MemoryStream sortie = new MemoryStream())
+            {
+                Ecrire(document, sortie, true, versions);
+                return sortie.ToArray();
+            }
+        }
+
+        private static void Ecrire(DocumentCarte document, Stream sortie, bool avecVersions, List<KeyValuePair<string, byte[]>> versions)
+        {
             string maintenant = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
             if (avecVersions)
             {
                 if (string.IsNullOrEmpty(document.DateCreation)) document.DateCreation = maintenant;
                 document.DateModification = maintenant;
             }
-
-            // L'ancien document.json et les versions déjà présentes sont relus avant d'écraser.
-            List<KeyValuePair<string, byte[]>> versions = avecVersions ? RelireVersions(chemin) : new List<KeyValuePair<string, byte[]>>();
 
             DocumentDto dto = new DocumentDto();
             dto.version = VersionFormat;
@@ -283,8 +304,7 @@ namespace Mentalo.Persistance
             serialiseur.MaxJsonLength = int.MaxValue;
             string json = serialiseur.Serialize(dto);
 
-            using (FileStream flux = new FileStream(chemin, FileMode.Create))
-            using (ZipArchive archive = new ZipArchive(flux, ZipArchiveMode.Create))
+            using (ZipArchive archive = new ZipArchive(sortie, ZipArchiveMode.Create, true))
             {
                 ZipArchiveEntry entree = archive.CreateEntry("document.json");
                 using (StreamWriter ecrivain = new StreamWriter(entree.Open(), Encoding.UTF8))
@@ -320,14 +340,29 @@ namespace Mentalo.Persistance
         /// version) et les versions déjà conservées ; rend la liste à réécrire, plafonnée.</summary>
         private static List<KeyValuePair<string, byte[]>> RelireVersions(string chemin)
         {
+            if (string.IsNullOrEmpty(chemin) || !File.Exists(chemin)) return new List<KeyValuePair<string, byte[]>>();
+            try
+            {
+                using (FileStream flux = new FileStream(chemin, FileMode.Open, FileAccess.Read))
+                    return RelireVersions(flux, File.GetLastWriteTime(chemin));
+            }
+            catch
+            {
+                // Une archive illisible ne doit pas empêcher d'enregistrer par-dessus.
+                return new List<KeyValuePair<string, byte[]>>();
+            }
+        }
+
+        /// <summary>Relit document.json et les versions d'une archive .tea (fichier
+        /// ou octets) ; « dateFichier » sert d'horodatage quand le document n'en a pas.</summary>
+        private static List<KeyValuePair<string, byte[]>> RelireVersions(Stream flux, DateTime dateFichier)
+        {
             List<KeyValuePair<string, byte[]>> versions = new List<KeyValuePair<string, byte[]>>();
             try
             {
-                if (!File.Exists(chemin)) return versions;
                 byte[] courant = null;
                 string horodatage = null;
-                using (FileStream flux = new FileStream(chemin, FileMode.Open, FileAccess.Read))
-                using (ZipArchive archive = new ZipArchive(flux, ZipArchiveMode.Read))
+                using (ZipArchive archive = new ZipArchive(flux, ZipArchiveMode.Read, true))
                 {
                     foreach (ZipArchiveEntry entree in archive.Entries)
                     {
@@ -349,7 +384,7 @@ namespace Mentalo.Persistance
                 }
                 if (courant == null) return versions;
                 if (string.IsNullOrEmpty(horodatage) || horodatage.Length < 16)
-                    horodatage = File.GetLastWriteTime(chemin).ToString("yyyy-MM-dd HH:mm");
+                    horodatage = dateFichier.ToString("yyyy-MM-dd HH:mm");
                 string nom = "versions/" + horodatage.Replace(" ", "_").Replace(":", "-") + ".json";
                 // Les noms se trient chronologiquement : la plus récente en dernier.
                 versions.Sort(delegate(KeyValuePair<string, byte[]> a, KeyValuePair<string, byte[]> b)
@@ -417,6 +452,36 @@ namespace Mentalo.Persistance
         public static DocumentCarte ChargerVersion(string chemin, string nomEntree)
         {
             using (FileStream flux = new FileStream(chemin, FileMode.Open, FileAccess.Read))
+            using (ZipArchive archive = new ZipArchive(flux, ZipArchiveMode.Read))
+                return ChargerDepuisArchive(archive, nomEntree);
+        }
+
+        /// <summary>Une carte depuis les octets d'un .tea (Marabook, 22/09/2026).</summary>
+        public static DocumentCarte Charger(byte[] octets)
+        {
+            using (MemoryStream flux = new MemoryStream(octets))
+            using (ZipArchive archive = new ZipArchive(flux, ZipArchiveMode.Read))
+                return ChargerDepuisArchive(archive, "document.json");
+        }
+
+        public static List<string> ListerVersions(byte[] octets)
+        {
+            List<string> noms = new List<string>();
+            if (octets == null || octets.Length == 0) return noms;
+            using (MemoryStream flux = new MemoryStream(octets))
+            using (ZipArchive archive = new ZipArchive(flux, ZipArchiveMode.Read))
+            {
+                foreach (ZipArchiveEntry entree in archive.Entries)
+                    if (entree.FullName.StartsWith("versions/") && entree.FullName.EndsWith(".json"))
+                        noms.Add(entree.FullName);
+            }
+            noms.Sort(delegate(string a, string b) { return string.CompareOrdinal(b, a); });
+            return noms;
+        }
+
+        public static DocumentCarte ChargerVersion(byte[] octets, string nomEntree)
+        {
+            using (MemoryStream flux = new MemoryStream(octets))
             using (ZipArchive archive = new ZipArchive(flux, ZipArchiveMode.Read))
                 return ChargerDepuisArchive(archive, nomEntree);
         }
