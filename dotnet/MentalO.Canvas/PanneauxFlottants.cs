@@ -44,12 +44,21 @@ namespace Mentalo.Vue
         public Border Recherche { get; private set; }
         public Border CompteurPresentation { get; private set; }
 
+        /// <summary>La très légère ombre en vignette sur les quatre bords du tableau
+        /// (Paramètres > apparence) — un calque sous les panneaux, posé par AjouterA.</summary>
+        public Grid Vignette { get; private set; }
+
+        /// <summary>Faux : l'hôte n'offre pas le panneau Historique (Marabook — Ctrl+Z
+        /// y suffit) ; il reste masqué quoi que disent les Paramètres.</summary>
+        public bool HistoriqueAutorise = true;
+
         /// <param name="avecLaser">Le compteur mentionne la touche L (Mental-O seul a le pointeur laser).</param>
         public PanneauxFlottants(ToileVue toile, Func<Window> proprietaire, IHabillage habillage, bool avecLaser)
         {
             _toile = toile;
             _proprietaire = proprietaire;
             _h = habillage;
+            Vignette = ConstruireVignette();
             MiniCarte = ConstruireMiniCarte();
             Inspecteur = ConstruireInspecteur();
             Historique = ConstruireHistorique();
@@ -83,6 +92,7 @@ namespace Mentalo.Vue
         /// <summary>Pose tous les panneaux sur la zone centrale (au-dessus de la toile).</summary>
         public void AjouterA(Panel zone)
         {
+            zone.Children.Add(Vignette);
             zone.Children.Add(Recherche);
             zone.Children.Add(Tust);
             zone.Children.Add(MiniCarte);
@@ -112,6 +122,33 @@ namespace Mentalo.Vue
         private TextBlock Titre(string texte)
         {
             return new TextBlock { Text = texte, FontWeight = FontWeight.Bold, FontSize = 12, Foreground = _h.Encre, Margin = new Thickness(0, 0, 0, 4) };
+        }
+
+        // ------------------------------------------------------------------ vignette
+
+        private static Grid ConstruireVignette()
+        {
+            Grid calque = new Grid { IsHitTestVisible = false };
+            Color ombre = Color.FromArgb(0x22, 0x00, 0x00, 0x00);
+            Color rien = Color.FromArgb(0x00, 0x00, 0x00, 0x00);
+            calque.Children.Add(new Rectangle { Height = 26, VerticalAlignment = VerticalAlignment.Top, Fill = Degrade(ombre, rien, false) });
+            calque.Children.Add(new Rectangle { Height = 26, VerticalAlignment = VerticalAlignment.Bottom, Fill = Degrade(rien, ombre, false) });
+            calque.Children.Add(new Rectangle { Width = 26, HorizontalAlignment = HorizontalAlignment.Left, Fill = Degrade(ombre, rien, true) });
+            calque.Children.Add(new Rectangle { Width = 26, HorizontalAlignment = HorizontalAlignment.Right, Fill = Degrade(rien, ombre, true) });
+            calque.IsVisible = ParametresGlobaux.VignetteTableau;
+            return calque;
+        }
+
+        private static LinearGradientBrush Degrade(Color de, Color vers, bool horizontal)
+        {
+            LinearGradientBrush brosse = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = horizontal ? new RelativePoint(1, 0, RelativeUnit.Relative) : new RelativePoint(0, 1, RelativeUnit.Relative)
+            };
+            brosse.GradientStops.Add(new GradientStop(de, 0));
+            brosse.GradientStops.Add(new GradientStop(vers, 1));
+            return brosse;
         }
 
         // ------------------------------------------------------------------ mini-carte
@@ -239,9 +276,10 @@ namespace Mentalo.Vue
         /// <summary>La visibilité de chaque panneau suit les Paramètres ; les contenus se rafraîchissent.</summary>
         public void MettreAJourTout()
         {
+            Vignette.IsVisible = ParametresGlobaux.VignetteTableau;
             MiniCarte.IsVisible = ParametresGlobaux.MiniCarteVisible;
             Inspecteur.IsVisible = ParametresGlobaux.InspecteurVisible;
-            Historique.IsVisible = ParametresGlobaux.HistoriqueVisible;
+            Historique.IsVisible = HistoriqueAutorise && ParametresGlobaux.HistoriqueVisible;
             Filtre.IsVisible = ParametresGlobaux.FiltreVisible;
             Tust.IsVisible = ParametresGlobaux.TustVisible;
             if (!ParametresGlobaux.FiltreVisible && _toile.FiltreActif) _toile.DefinirFiltreEtiquettes(null, false);

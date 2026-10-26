@@ -19,9 +19,12 @@ trancher) · — sans raccourci.
 | Nouveau / Ouvrir / Enregistrer / Enregistrer sous | Ctrl+N / Ctrl+O / Ctrl+S / Ctrl+Maj+S | ✖ (à Marabook) | La carte est enregistrée avec le .plot (Ctrl+S de Marabook). |
 | Imprimer | Ctrl+P | ✖ | Export PDF dans le menu Exporter de la barre. |
 | Annuler / Rétablir | Ctrl+Z / Ctrl+Y | ✔ (toile au clavier) | ⚠ Marabook a son propre Ctrl+Z : la toile le prend quand elle a le focus. |
-| Copier les boîtes / Coller / Dupliquer | Ctrl+C / Ctrl+V / Ctrl+D | ✔ | ⚠ Ctrl+D : vérifier qu'il n'est pas pris par Marabook sur la vue carte. |
+| Copier les boîtes / Coller | Ctrl+C / Ctrl+V | ✔ | |
+| Dupliquer | Ctrl+D | ✖ (tranché le 26/10 soir) | Bouton « Dupliquer » à côté de « Nouvelle boîte », actif quand une boîte est sélectionnée. |
 | Rechercher dans la carte | Ctrl+F | ✔ | ⚠ Ctrl+F = recherche de Marabook ; la toile gagne tant qu'elle a le focus. |
-| Modifier la boîte sélectionnée | F2 | ✔ | ⚠ F2 = Généalogie sur les fiches (1.1.0) ; pas de conflit sur une carte, mais deux sens pour la même touche. |
+| Modifier la boîte sélectionnée | F2 | ✖ (tranché le 26/10 soir) | Un clic sélectionne, un double-clic édite. |
+| Lien vers une fiche / vers un écrit | — | Ctrl+K / Ctrl+L (fixes) | Les mêmes gestes que l'éditeur de Marabook ; aussi par les icônes du Général (Texte) et le menu Insertion. |
+| Tuile d'un élément dans la boîte | — | icône du Général (Texte), menu Insertion | Clic droit sur la tuile : normal / condensé. |
 | Supprimer la sélection | Suppr | ✔ | |
 | Grouper / Dégrouper | Ctrl+G / Ctrl+Maj+G | ✔ | |
 | Empiler la sélection | — | — | Menu Aligner. |
@@ -34,8 +37,8 @@ trancher) · — sans raccourci.
 | Zoom avant / arrière / 100 % | Ctrl++ / Ctrl+− / Ctrl+0 (pavé ou rangée du haut) | ✔ | ⚠ Marabook zoome-t-il ses pages avec Ctrl+molette ou Ctrl++ ? À trancher. |
 | Recentrer la carte | Ctrl+R | ✔ | |
 | Plein écran | F11 | ✖ (à Marabook) | |
-| Mode présentation | F5 | ✔ (masque la barre de la toile, pas Marabook) | Échap quitte. |
-| Modes automatique / déplacement / liens / lecture | Ctrl+1 / Ctrl+2 / Ctrl+3 / Ctrl+4 | ✔ | ⚠ Ctrl+1…4 changent de vue dans Marabook (Pages/Brouillon/Calme…) : conflit direct — proposition : Alt+1…4 dans le DLC, ou laisser Marabook gagner et passer par les boutons de mode. |
+| Mode présentation | F5 | ✖ (retirée du DLC le 26/10 soir) | Pas de présentation dans Marabook. |
+| Modes automatique / déplacement / liens / lecture | Ctrl+1 / Ctrl+2 / Ctrl+3 / Ctrl+4 | ✖ (tranché le 26/10 soir : pas de raccourci pour l'instant) | Les boutons de mode de la barre des boîtes ; Ctrl+1…4 restent aux vues de Marabook. |
 | Gras / Italique / Souligné | Ctrl+B / Ctrl+I / Ctrl+U | ✔ | Mêmes gestes que l'éditeur de Marabook : cohérent. |
 | Boîte sœur / boîte enfant | Entrée / Tab | ✔ | Sur la toile seulement, hors édition. |
 | Navigation entre boîtes | ← → ↑ ↓ | ✔ | |

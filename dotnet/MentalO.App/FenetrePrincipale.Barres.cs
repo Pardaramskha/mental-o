@@ -56,38 +56,6 @@ namespace Mentalo
         private void OuvrirRecherche() { _panneaux.OuvrirRecherche(); }
         private void FermerRecherche() { _panneaux.FermerRecherche(); }
 
-        /// <summary>Très légère ombre en vignette sur les quatre bords du tableau.</summary>
-        private Grid ConstruireVignette()
-        {
-            Grid calque = new Grid { IsHitTestVisible = false };
-            Color ombre = Color.FromArgb(0x22, 0x00, 0x00, 0x00);
-            Color rien = Color.FromArgb(0x00, 0x00, 0x00, 0x00);
-            calque.Children.Add(new Rectangle { Height = 26, VerticalAlignment = VerticalAlignment.Top, Fill = Degrade(ombre, rien, false) });
-            calque.Children.Add(new Rectangle { Height = 26, VerticalAlignment = VerticalAlignment.Bottom, Fill = Degrade(rien, ombre, false) });
-            calque.Children.Add(new Rectangle { Width = 26, HorizontalAlignment = HorizontalAlignment.Left, Fill = Degrade(ombre, rien, true) });
-            calque.Children.Add(new Rectangle { Width = 26, HorizontalAlignment = HorizontalAlignment.Right, Fill = Degrade(rien, ombre, true) });
-            calque.IsVisible = ParametresGlobaux.VignetteTableau;
-            return calque;
-        }
-
-        private static LinearGradientBrush Degrade(Color de, Color vers, bool horizontal)
-        {
-            LinearGradientBrush brosse = new LinearGradientBrush
-            {
-                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-                EndPoint = horizontal ? new RelativePoint(1, 0, RelativeUnit.Relative) : new RelativePoint(0, 1, RelativeUnit.Relative)
-            };
-            brosse.GradientStops.Add(new GradientStop(de, 0));
-            brosse.GradientStops.Add(new GradientStop(vers, 1));
-            return brosse;
-        }
-
-        private void MettreAJourVignette()
-        {
-            if (_vignette != null)
-                _vignette.IsVisible = ParametresGlobaux.VignetteTableau;
-        }
-
         private void BasculerTheme()
         {
             ParametresGlobaux.ThemeSombre = !ParametresGlobaux.ThemeSombre;

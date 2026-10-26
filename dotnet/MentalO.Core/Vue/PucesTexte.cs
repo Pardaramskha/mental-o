@@ -142,7 +142,8 @@ namespace Mentalo.Vue
             lignes.Add(courante);
             foreach (Segment s in source)
             {
-                string[] morceaux = s.Texte.Split('\n');
+                // Un « \r » résiduel (texte venu d'ailleurs) ne fait pas une ligne de plus (26/10/2026).
+                string[] morceaux = s.Texte.Replace("\r", "").Split('\n');
                 for (int i = 0; i < morceaux.Length; i++)
                 {
                     if (i > 0)

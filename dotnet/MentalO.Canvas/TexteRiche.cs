@@ -144,11 +144,15 @@ namespace Mentalo.Vue
             return inlines;
         }
 
+        /// <summary>Vrai pendant le rendu d'une boîte passée en sombre (Palette.BoiteSubstituee) :
+        /// le texte noir d'usine s'y rend en clair. Posé par NoeudVisuel autour du rendu.</summary>
+        public static bool ContexteSombre;
+
         public static void AppliquerAuRun(Run run, Segment s)
         {
             run.FontFamily = Police(s.Police);
             run.FontSize = s.Taille > 0 ? s.Taille : Segment.TailleDefaut;
-            run.Foreground = new SolidColorBrush(Palette.CouleurDepuis(s.Couleur, Color.FromRgb(0x1C, 0x1B, 0x19)));
+            run.Foreground = new SolidColorBrush(Palette.TexteEffectif(s.Couleur, ContexteSombre));
             run.FontWeight = s.Gras ? FontWeight.Bold : FontWeight.Normal;
             run.FontStyle = s.Italique ? FontStyle.Italic : FontStyle.Normal;
             run.TextDecorations = Decorations(s.Souligne, s.Barre);

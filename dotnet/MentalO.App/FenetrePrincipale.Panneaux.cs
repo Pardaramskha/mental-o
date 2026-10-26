@@ -66,8 +66,7 @@ namespace Mentalo
             DialogueParametres.Afficher(this, delegate
             {
                 RafraichirGestesMenus(_menuPrincipal);
-                MettreAJourTust();
-                MettreAJourVignette();
+                MettreAJourPanneaux(); // Tust, vignette, panneaux : tout suit les Paramètres
             });
         }
 

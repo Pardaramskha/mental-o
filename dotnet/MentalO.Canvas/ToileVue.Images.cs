@@ -183,16 +183,29 @@ namespace Mentalo.Vue
         /// (le motif n'entre pas dans ce critère).</summary>
         public Color CouleurFondEffective()
         {
-            bool couleurParDefaut = string.Equals(Document.FondCouleur, "#F7F5F0",
-                StringComparison.OrdinalIgnoreCase);
-            if (couleurParDefaut && Mentalo.Parametres.ParametresGlobaux.ThemeSombre)
-                return Color.FromRgb(0x16, 0x20, 0x2E);
+            if (FondSombreSubstitue()) return Color.FromRgb(0x16, 0x20, 0x2E);
             return Palette.CouleurDepuis(Document.FondCouleur, Color.FromRgb(0xF7, 0xF5, 0xF0));
         }
 
+        /// <summary>Vrai quand le thème sombre remplace le fond d'usine : les boîtes
+        /// d'usine (blanches, texte noir) suivent alors (Palette.SubstitutionSombre).</summary>
+        private bool FondSombreSubstitue()
+        {
+            bool couleurParDefaut = string.Equals(Document.FondCouleur, "#F7F5F0", StringComparison.OrdinalIgnoreCase);
+            return couleurParDefaut && Mentalo.Parametres.ParametresGlobaux.ThemeSombre;
+        }
+
+        /// <summary>Le fond du tableau — et, le thème sombre ayant pu changer, les
+        /// boîtes, les titres de groupes et les étiquettes de liens.</summary>
         public void AppliquerFondDocument()
         {
+            Palette.SubstitutionSombre = FondSombreSubstitue();
             Background = ConstruireFond(CouleurFondEffective(), Document.FondMotif);
+            foreach (KeyValuePair<Noeud, NoeudVisuel> kv in _visuels)
+            {
+                kv.Value.MettreAJourStyle();
+                kv.Value.MettreAJour();
+            }
             foreach (KeyValuePair<Groupe, TextBlock> kv in _titresGroupes)
                 AppliquerStyleVisuelGroupe(kv.Key);
             // Les étiquettes de liens portent le fond du tableau pour « couper » le trait.
@@ -277,12 +290,7 @@ namespace Mentalo.Vue
             Segment.TailleDefaut = Document.TailleParDefaut;
             Segment.CouleurDefaut = Document.CouleurParDefaut;
             NoeudVisuel.PaddingTexte = Document.PaddingBoites;
-            AppliquerFondDocument();
-            foreach (KeyValuePair<Noeud, NoeudVisuel> kv in _visuels)
-            {
-                kv.Value.MettreAJourStyle();
-                kv.Value.MettreAJour();
-            }
+            AppliquerFondDocument(); // redessine aussi les boîtes
             if (signaler) SignalerModification();
         }
 

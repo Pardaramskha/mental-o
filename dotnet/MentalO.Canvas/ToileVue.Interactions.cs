@@ -6,6 +6,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using Mentalo.Historique;
 using Mentalo.Modele;
 
@@ -770,7 +771,9 @@ namespace Mentalo.Vue
 
         private void NoeudEditionTerminee(NoeudVisuel visuel, ResultatEdition resultat)
         {
-            Focus();
+            // Le clavier revient à la toile — sauf s'il est déjà parti ailleurs dans la
+            // fenêtre (un champ du rail de Marabook, 26/10) : on ne le lui reprend pas.
+            if (!FocusAilleurs()) Focus();
             bool fraichementCree = (_noeudFraichementCree == visuel.Modele);
             _noeudFraichementCree = null;
 
@@ -798,6 +801,18 @@ namespace Mentalo.Vue
                 SignalerModification();
             MettreAJourGrip();
             SignalerFormatCible();
+        }
+
+        /// <summary>Vrai si le clavier est sur un contrôle hors de la toile (et pas nulle part).</summary>
+        private bool FocusAilleurs()
+        {
+            TopLevel sommet = TopLevel.GetTopLevel(this);
+            IInputElement focus = sommet == null || sommet.FocusManager == null ? null : sommet.FocusManager.GetFocusedElement();
+            Visual visuel = focus as Visual;
+            if (visuel == null) return false;
+            for (Visual v = visuel; v != null; v = v.GetVisualParent())
+                if (ReferenceEquals(v, this)) return false;
+            return true;
         }
 
         private void Selectionner(NoeudVisuel visuel)

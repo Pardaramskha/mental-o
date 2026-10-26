@@ -22,7 +22,12 @@ namespace Mentalo.Vue
     {
         private readonly ToileVue _toile;
         private readonly IHabillage _h;
+        private readonly bool _vertical;
         private bool _synchroEnCours;
+
+        // Inspecteur vertical (le rail de Marabook, 26/10/2026)
+        private StackPanel _sectionTexte, _sectionBoite, _sectionGroupe, _sectionLien;
+        private TextBlock _inviteInspecteur;
 
         // Barre de modes
         private ToggleButton _btnModeAuto, _btnModeDeplacement, _btnModeLiens, _btnModeLecture;
@@ -33,7 +38,7 @@ namespace Mentalo.Vue
 
         // Barre de personnalisation
         private Border _barreFormat;
-        private StackPanel _panneauTexte, _panneauBoites, _panneauGroupes, _panneauLiens;
+        private Panel _panneauTexte, _panneauBoites, _panneauGroupes, _panneauLiens;
         private ComboBox _comboPolice, _comboTaille, _comboCouleur, _comboSurlignage;
         private ToggleButton _btnGras, _btnItalique, _btnSouligne, _btnBarre;
         private ToggleButton _btnAlignGauche, _btnAlignCentre, _btnAlignDroite;
@@ -52,12 +57,32 @@ namespace Mentalo.Vue
         /// <summary>Après chaque synchronisation avec la sélection (l'hôte met à jour son inspecteur).</summary>
         public event Action Synchronisee;
 
-        public BarresToile(ToileVue toile, IHabillage habillage)
+        public BarresToile(ToileVue toile, IHabillage habillage) : this(toile, habillage, false)
+        {
+        }
+
+        /// <param name="vertical">Les panneaux se présentent en colonne (ConstruireInspecteur)
+        /// plutôt qu'en barre : les contrôles passent à la ligne, pas de séparateurs.</param>
+        public BarresToile(ToileVue toile, IHabillage habillage, bool vertical)
         {
             _toile = toile;
             _h = habillage;
+            _vertical = vertical;
             _toile.ModeChange += MettreAJourModes;
             _toile.FormatCibleChange += MettreAJourFormat;
+        }
+
+        /// <summary>Le conteneur d'un panneau de réglages : une ligne en barre, un
+        /// panneau à retours à la ligne en colonne.</summary>
+        private Panel NouveauPanneau()
+        {
+            if (_vertical) return new WrapPanel { Orientation = Orientation.Horizontal };
+            return new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 4, 6, 4) };
+        }
+
+        private void AjouterSeparateur(Panel panneau)
+        {
+            if (!_vertical) panneau.Children.Add(_h.Separateur());
         }
 
         /// <summary>La barre de personnalisation (nulle avant ConstruireBarreFormat).</summary>
@@ -71,6 +96,13 @@ namespace Mentalo.Vue
         /// bascules, « Barre d'outils : » et ses quatre onglets, l'épingle, le
         /// commentaire du mode. L'hôte le pose dans sa propre barre.</summary>
         public StackPanel ConstruirePanneauModes()
+        {
+            return ConstruirePanneauModes(true);
+        }
+
+        /// <param name="avecOnglets">Avec « Barre d'outils : » et ses onglets (faux quand
+        /// les réglages vivent dans un inspecteur, pas dans une barre).</param>
+        public StackPanel ConstruirePanneauModes(bool avecOnglets)
         {
             StackPanel panneau = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 3, 6, 3) };
             panneau.Children.Add(TexteDoux("Mode :"));
@@ -87,18 +119,21 @@ namespace Mentalo.Vue
             panneau.Children.Add(_btnModeLiens);
             panneau.Children.Add(_btnModeLecture);
 
-            panneau.Children.Add(_h.Separateur());
-            panneau.Children.Add(TexteDoux("Barre d'outils :"));
-            _ongletTexte = BoutonOnglet("Texte", "text-custom-bar");
-            _ongletBoite = BoutonOnglet("Boîte", "box-custom-bar");
-            _ongletGroupe = BoutonOnglet("Groupe", "group-custom-bar");
-            _ongletLien = BoutonOnglet("Lien", "links-custom-bar");
-            panneau.Children.Add(_ongletTexte);
-            panneau.Children.Add(_ongletBoite);
-            panneau.Children.Add(_ongletGroupe);
-            panneau.Children.Add(_ongletLien);
-            _epingleOnglet = _h.Bascule(_h.Glyphe("⚲", 13), "Épingler l'onglet actuel : la sélection ne le change plus automatiquement");
-            panneau.Children.Add(_epingleOnglet);
+            if (avecOnglets)
+            {
+                AjouterSeparateur(panneau);
+                panneau.Children.Add(TexteDoux("Barre d'outils :"));
+                _ongletTexte = BoutonOnglet("Texte", "text-custom-bar");
+                _ongletBoite = BoutonOnglet("Boîte", "box-custom-bar");
+                _ongletGroupe = BoutonOnglet("Groupe", "group-custom-bar");
+                _ongletLien = BoutonOnglet("Lien", "links-custom-bar");
+                panneau.Children.Add(_ongletTexte);
+                panneau.Children.Add(_ongletBoite);
+                panneau.Children.Add(_ongletGroupe);
+                panneau.Children.Add(_ongletLien);
+                _epingleOnglet = _h.Bascule(_h.Glyphe("⚲", 13), "Épingler l'onglet actuel : la sélection ne le change plus automatiquement");
+                panneau.Children.Add(_epingleOnglet);
+            }
 
             _texteMode = new TextBlock
             {
@@ -202,6 +237,64 @@ namespace Mentalo.Vue
             return _barreFormat;
         }
 
+        /// <summary>L'INSPECTEUR VERTICAL (26/10/2026) : les mêmes réglages que la
+        /// barre de personnalisation, empilés pour le Général du rail de Marabook.
+        /// Seule la section de l'élément sélectionné se montre : Texte pendant
+        /// l'édition d'une boîte, Boîte + Texte pour une boîte sélectionnée, Lien,
+        /// Groupe. « extrasTexte » : des boutons de l'hôte en tête de la section
+        /// Texte (liens vers les fiches, les écrits, les tuiles).</summary>
+        public Control ConstruireInspecteur(Control extrasTexte)
+        {
+            _panneauTexte = ConstruirePanneauTexte();
+            _panneauBoites = ConstruirePanneauBoites();
+            _panneauGroupes = ConstruirePanneauGroupes();
+            _panneauLiens = ConstruirePanneauLiens();
+            _inviteInspecteur = new TextBlock
+            {
+                Text = "Sélectionnez une boîte, un lien ou un groupe : ses réglages s'affichent ici. Double-clic sur une boîte pour modifier son texte.",
+                FontSize = 12,
+                Foreground = _h.TexteDoux,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+            _sectionBoite = Section("Boîte", _panneauBoites, null);
+            _sectionTexte = Section("Texte", _panneauTexte, extrasTexte);
+            _sectionGroupe = Section("Groupe", _panneauGroupes, null);
+            _sectionLien = Section("Lien", _panneauLiens, null);
+            StackPanel pile = new StackPanel();
+            pile.Children.Add(_inviteInspecteur);
+            pile.Children.Add(_sectionBoite);
+            pile.Children.Add(_sectionTexte);
+            pile.Children.Add(_sectionGroupe);
+            pile.Children.Add(_sectionLien);
+            MettreAJourFormat();
+            return pile;
+        }
+
+        private StackPanel Section(string titre, Control contenu, Control extras)
+        {
+            StackPanel section = new StackPanel { Margin = new Thickness(0, 0, 0, 10), IsVisible = false };
+            section.Children.Add(new TextBlock { Text = titre, FontSize = 12, Foreground = _h.TexteDoux, Margin = new Thickness(0, 0, 0, 4) });
+            if (extras != null) section.Children.Add(extras);
+            section.Children.Add(contenu);
+            return section;
+        }
+
+        /// <summary>Quelle section de l'inspecteur se montre : lien, groupe, boîte
+        /// (texte seul pendant l'édition), ou l'invite.</summary>
+        private void MettreAJourSections(FormatCourant etat)
+        {
+            if (_sectionTexte == null) return;
+            bool lien = _toile.LienSelectionne != null;
+            bool groupe = !lien && _toile.GroupeSelectionne != null;
+            bool boite = !lien && !groupe && etat.Actif;
+            _sectionLien.IsVisible = lien;
+            _sectionGroupe.IsVisible = groupe;
+            _sectionTexte.IsVisible = boite;
+            _sectionBoite.IsVisible = boite && !_toile.EditionEnCours;
+            _inviteInspecteur.IsVisible = !lien && !groupe && !boite;
+        }
+
         private ComboBox Combo(double largeur, string infobulle)
         {
             ComboBox combo = new ComboBox { Width = largeur, VerticalAlignment = VerticalAlignment.Center };
@@ -212,7 +305,7 @@ namespace Mentalo.Vue
         /// <summary>Empile une petite étiquette au-dessus d'un contrôle de barre d'outils.</summary>
         private StackPanel AvecEtiquette(string etiquette, Control controle)
         {
-            StackPanel pile = new StackPanel { Margin = new Thickness(0, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center };
+            StackPanel pile = new StackPanel { Margin = _vertical ? new Thickness(0, 0, 6, 6) : new Thickness(0, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center };
             pile.Children.Add(new TextBlock
             {
                 Text = etiquette,
@@ -243,9 +336,9 @@ namespace Mentalo.Vue
 
         // ---- boîtes
 
-        private StackPanel ConstruirePanneauBoites()
+        private Panel ConstruirePanneauBoites()
         {
-            StackPanel panneau = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 4, 6, 4) };
+            Panel panneau = NouveauPanneau();
 
             _comboFond = Combo(124, "Fond de la boîte");
             _comboFond.SelectionChanged += delegate { CouleurBoiteChoisie(_comboFond, "fond"); };
@@ -354,9 +447,9 @@ namespace Mentalo.Vue
 
         // ---- groupes
 
-        private StackPanel ConstruirePanneauGroupes()
+        private Panel ConstruirePanneauGroupes()
         {
-            StackPanel panneau = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 4, 6, 4) };
+            Panel panneau = NouveauPanneau();
 
             _comboCouleurGroupe = Combo(118, "Couleur du cadre");
             SurChoix(_comboCouleurGroupe, delegate(ComboBoxItem c)
@@ -460,9 +553,9 @@ namespace Mentalo.Vue
 
         // ---- liens
 
-        private StackPanel ConstruirePanneauLiens()
+        private Panel ConstruirePanneauLiens()
         {
-            StackPanel panneau = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 4, 6, 4) };
+            Panel panneau = NouveauPanneau();
 
             _comboCouleurLien = Combo(124, "Couleur du lien");
             SurChoix(_comboCouleurLien, delegate(ComboBoxItem c)
@@ -533,9 +626,9 @@ namespace Mentalo.Vue
 
         // ---- texte
 
-        private StackPanel ConstruirePanneauTexte()
+        private Panel ConstruirePanneauTexte()
         {
-            StackPanel panneau = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 4, 6, 4) };
+            Panel panneau = NouveauPanneau();
 
             _comboPolice = Combo(180, "Police — toutes les polices installées");
             foreach (string police in TexteRiche.PolicesSysteme())
@@ -553,7 +646,7 @@ namespace Mentalo.Vue
             });
             panneau.Children.Add(AvecEtiquette("Taille", _comboTaille));
 
-            panneau.Children.Add(_h.Separateur());
+            AjouterSeparateur(panneau);
 
             _btnGras = BoutonFormat("text-b-bold", "Gras (" + ParametresGlobaux.GesteAffiche("gras") + ")", "gras", null);
             _btnItalique = BoutonFormat("text-italic", "Italique (" + ParametresGlobaux.GesteAffiche("italique") + ")", "italique", null);
@@ -564,7 +657,7 @@ namespace Mentalo.Vue
             panneau.Children.Add(_btnSouligne);
             panneau.Children.Add(_btnBarre);
 
-            panneau.Children.Add(_h.Separateur());
+            AjouterSeparateur(panneau);
 
             _comboCouleur = Combo(126, "Couleur du texte");
             _comboCouleur.SelectionChanged += delegate { CouleurChoisie(_comboCouleur, "couleur"); };
@@ -576,7 +669,7 @@ namespace Mentalo.Vue
 
             RemplirCombosCouleurs();
 
-            panneau.Children.Add(_h.Separateur());
+            AjouterSeparateur(panneau);
 
             _btnAlignGauche = BoutonFormat("text-align-left", "Aligner à gauche", "alignement", "gauche");
             _btnAlignCentre = BoutonFormat("text-align-center", "Centrer", "alignement", "centre");
@@ -585,7 +678,7 @@ namespace Mentalo.Vue
             panneau.Children.Add(_btnAlignCentre);
             panneau.Children.Add(_btnAlignDroite);
 
-            panneau.Children.Add(_h.Separateur());
+            AjouterSeparateur(panneau);
             panneau.Children.Add(BoutonPuce("•", "Liste à puces", "puce"));
             panneau.Children.Add(BoutonPuce("–", "Liste à tirets", "tiret"));
             panneau.Children.Add(BoutonPuce("1.", "Liste numérotée", "numero"));
@@ -725,6 +818,7 @@ namespace Mentalo.Vue
                 MettreAJourBarreBoites(etat);
                 MettreAJourBarreGroupes();
                 MettreAJourBarreLiens();
+                MettreAJourSections(etat);
 
                 SelectionnerParTag(_comboPolice, etat.Police);
                 SelectionnerParNombre(_comboTaille, etat.Taille);

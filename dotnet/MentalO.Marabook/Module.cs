@@ -21,6 +21,14 @@ namespace MentalO.Marabook
     {
         private IModuleHost _host;
 
+        /// <summary>Les actions de la toile sans raccourci ni réglage dans Marabook.</summary>
+        public static readonly string[] ActionsEcartees =
+        {
+            "nouveau", "ouvrir", "enregistrer", "enregistrer-sous", "imprimer", "plein-ecran",
+            "dupliquer", "editer", "presentation",
+            "mode-automatique", "mode-deplacement", "mode-liens", "mode-lecture"
+        };
+
         public string Id { get { return "mental-o"; } }
 
         public IMindMapProvider MindMaps { get { return this; } }
@@ -46,16 +54,19 @@ namespace MentalO.Marabook
             if (premierLancement)
             {
                 // Dans Marabook, la carte arrive avec ses panneaux : mini-carte,
-                // Tust des raccourcis, inspecteur et historique (menu Fenêtres
-                // de la barre d'actions pour les replier).
+                // Tust des raccourcis et inspecteur (menu Fenêtres pour les replier).
                 ParametresGlobaux.MiniCarteVisible = true;
                 ParametresGlobaux.TustVisible = true;
                 ParametresGlobaux.InspecteurVisible = true;
-                ParametresGlobaux.HistoriqueVisible = true;
                 try { ParametresGlobaux.Enregistrer(); } catch { }
             }
+            // Ce que Marabook écarte (26/10 soir) : les actions de fichier et de
+            // fenêtre sont les siennes ; Dupliquer a son bouton, le double-clic
+            // édite, les modes et la présentation n'ont pas de raccourci.
+            foreach (string id in ActionsEcartees) ParametresGlobaux.ActionsMasquees.Add(id);
             ParametresGlobaux.ThemeSombre = host.DarkTheme;
             Mentalo.Vue.Chrome.Basculer(host.DarkTheme);
+            MindMapEditor.OuvrirCarteDeSondeSiDemandee(host); // MENTALO_SONDE : la sonde ouvre elle-même la carte de démo
             host.ThemeChanged += delegate
             {
                 ParametresGlobaux.ThemeSombre = host.DarkTheme;

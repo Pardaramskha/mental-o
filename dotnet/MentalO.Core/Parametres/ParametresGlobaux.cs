@@ -93,6 +93,18 @@ namespace Mentalo.Parametres
 
         public static Dictionary<string, string> Raccourcis = new Dictionary<string, string>();
         public static HashSet<string> Favoris = new HashSet<string>();
+
+        /// <summary>LES ACTIONS QUE L'HÔTE ÉCARTE (26/10/2026) : en DLC de Marabook,
+        /// les actions de fichier reviennent à Marabook, la duplication a son
+        /// bouton, le double-clic édite, les modes et la présentation n'ont pas
+        /// de raccourci. Une action masquée n'est ni listée (Préférences, Tust)
+        /// ni déclenchée au clavier (ActionPour).</summary>
+        public static readonly HashSet<string> ActionsMasquees = new HashSet<string>();
+
+        public static bool EstMasquee(string id)
+        {
+            return ActionsMasquees.Contains(id);
+        }
         public static bool TustVisible;
         public static bool MiniCarteVisible;
         public static bool InspecteurVisible;
@@ -380,7 +392,7 @@ namespace Mentalo.Parametres
         public static string ActionPour(Key touche, KeyModifiers modificateurs)
         {
             foreach (DefinitionAction action in Actions)
-                if (Correspond(action.Id, touche, modificateurs)) return action.Id;
+                if (!EstMasquee(action.Id) && Correspond(action.Id, touche, modificateurs)) return action.Id;
             return null;
         }
 

@@ -158,9 +158,15 @@ namespace Mentalo.Vue
 
         // ------------------------------------------------------------------ menu du lien
 
-        /// <summary>Clic gauche ou droit sur un lien : toutes les actions au même endroit.</summary>
-        private void OuvrirMenuFichier(NoeudVisuel visuel, PieceJointe piece, Control ancre)
+        /// <summary>Clic gauche ou droit sur un lien : toutes les actions au même endroit
+        /// (un lien vers l'hôte, lui, s'ouvre au clic gauche — ToileVue.Hote).</summary>
+        private void OuvrirMenuFichier(NoeudVisuel visuel, PieceJointe piece, Control ancre, bool droit)
         {
+            if (piece.EstLienHote)
+            {
+                OuvrirMenuHote(visuel, piece, ancre, droit);
+                return;
+            }
             if (piece.EstUrl)
             {
                 OuvrirMenuUrl(visuel, piece, ancre);

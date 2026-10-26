@@ -64,7 +64,7 @@ namespace Mentalo
         // Panneaux flottants : les coches du menu Fenêtres
         private MenuItem _menuTust, _menuMiniCarte, _menuInspecteur, _menuHistorique;
         private MenuItem _menuRecents;
-        private Grid _vignette;
+
         private Dictionary<string, Action> _actions;
 
         public FenetrePrincipale()
@@ -111,15 +111,13 @@ namespace Mentalo
             Grid zoneCentrale = new Grid();
             _zoneCentrale = zoneCentrale;
             zoneCentrale.Children.Add(_toile);
-            _vignette = ConstruireVignette();
-            zoneCentrale.Children.Add(_vignette);
-            _panneaux.AjouterA(zoneCentrale);
+            _panneaux.AjouterA(zoneCentrale); // la vignette du tableau et les panneaux flottants
             _calqueLaser = ConstruireLaser();
             zoneCentrale.Children.Add(_calqueLaser);
             racine.Children.Add(zoneCentrale);
             Content = racine;
 
-            NoeudVisuel.ZoneFormatage = _barreFormat;
+            NoeudVisuel.ZonesFormatage.Add(_barreFormat);
 
             BrancherActions();
             AddHandler(KeyDownEvent, ToucheEnfoncee, Avalonia.Interactivity.RoutingStrategies.Tunnel);

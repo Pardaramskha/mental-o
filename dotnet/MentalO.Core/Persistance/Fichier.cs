@@ -100,6 +100,7 @@ namespace Mentalo.Persistance
         public string chemin { get; set; }      // chemin d'origine (absolu), peut manquer
         public string nomFichier { get; set; }  // nom d'origine avec extension
         public string zip { get; set; }         // "fichiers/<id><ext>" si intégré au .tea, sinon null
+        public string affichage { get; set; }   // lien vers l'hôte (26/10/2026) : null = ligne de lien, "normal" | "condense" = tuile
     }
 
     public class SegmentDto
@@ -256,6 +257,7 @@ namespace Mentalo.Persistance
                         fd.nom = piece.Nom;
                         fd.chemin = piece.Chemin;
                         fd.nomFichier = piece.NomFichier;
+                        fd.affichage = piece.Affichage;
                         if (piece.EstIntegre) fd.zip = EntreeFichier(piece);
                         nd.fichiers.Add(fd);
                     }
@@ -606,6 +608,7 @@ namespace Mentalo.Persistance
                             if (!string.IsNullOrEmpty(fd.id)) piece.Id = fd.id;
                             piece.Chemin = fd.chemin;
                             piece.NomFichier = fd.nomFichier;
+                            piece.Affichage = string.IsNullOrEmpty(fd.affichage) ? null : fd.affichage;
                             if (string.IsNullOrEmpty(piece.NomFichier) && !string.IsNullOrEmpty(fd.chemin))
                                 piece.NomFichier = Path.GetFileName(fd.chemin);
                             piece.Nom = string.IsNullOrEmpty(fd.nom) ? (piece.NomFichier ?? "Fichier") : fd.nom;
@@ -630,11 +633,11 @@ namespace Mentalo.Persistance
                         }
                     }
                     if (nd.riche != null && nd.riche.Count > 0)
-                        n.Segments = DepuisDtos(nd.riche);
+                        n.Segments = DepuisDtos(nd.riche, document);
                     else
                         n.DefinirTexteSimple(nd.texte ?? ""); // cartes v1/v2
                     if (nd.richeApres != null && nd.richeApres.Count > 0)
-                        n.SegmentsApres = DepuisDtos(nd.richeApres);
+                        n.SegmentsApres = DepuisDtos(nd.richeApres, document);
                     document.Noeuds.Add(n);
                 }
             }
@@ -702,16 +705,20 @@ namespace Mentalo.Persistance
             return dtos;
         }
 
-        private static List<Segment> DepuisDtos(List<SegmentDto> dtos)
+        /// <summary>Un segment sans police, taille ou couleur dans le fichier prend
+        /// les défauts DU DOCUMENT LU (26/10/2026) — pas les statiques de Segment,
+        /// qui sont encore ceux de la carte précédente : un thème appliqué ensuite
+        /// ne reconnaissait plus ces segments comme « couleur par défaut ».</summary>
+        private static List<Segment> DepuisDtos(List<SegmentDto> dtos, DocumentCarte document)
         {
             List<Segment> segments = new List<Segment>();
             foreach (SegmentDto sd in dtos)
             {
                 Segment s = new Segment();
                 s.Texte = sd.t ?? "";
-                if (!string.IsNullOrEmpty(sd.police)) s.Police = sd.police;
-                if (sd.taille > 0) s.Taille = sd.taille;
-                if (!string.IsNullOrEmpty(sd.couleur)) s.Couleur = sd.couleur;
+                s.Police = !string.IsNullOrEmpty(sd.police) ? sd.police : document.PoliceParDefaut;
+                s.Taille = sd.taille > 0 ? sd.taille : document.TailleParDefaut;
+                s.Couleur = !string.IsNullOrEmpty(sd.couleur) ? sd.couleur : document.CouleurParDefaut;
                 s.Gras = sd.gras;
                 s.Italique = sd.italique;
                 s.Souligne = sd.souligne;

@@ -57,6 +57,45 @@ namespace Mentalo.Vue
             return Color.TryParse(hexa, out couleur) ? couleur : defaut;
         }
 
+        /// <summary>LE THÈME SOMBRE DE L'HÔTE SUR UNE CARTE AUX COULEURS D'USINE
+        /// (26/10/2026) : comme le fond crème devient bleu nuit (ToileVue.
+        /// CouleurFondEffective), les boîtes blanches à bordure sable et leur
+        /// texte noir passent en sombre et en clair — à l'affichage seulement, le
+        /// fichier garde ses couleurs. Posé par la toile ; faux dès que la carte
+        /// porte sa propre couleur de fond (un thème de carte, par exemple).</summary>
+        public static bool SubstitutionSombre;
+
+        private static bool EstUsine(string hexa, string usine)
+        {
+            return string.Equals(hexa, usine, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>Vrai si cette boîte (par son fond) est rendue en sombre.</summary>
+        public static bool BoiteSubstituee(string fondBoite)
+        {
+            return SubstitutionSombre && EstUsine(fondBoite, "#FFFFFF");
+        }
+
+        public static Color FondBoiteEffectif(string hexa)
+        {
+            if (BoiteSubstituee(hexa)) return Color.FromRgb(0x22, 0x30, 0x3F);
+            return CouleurDepuis(hexa, Colors.White);
+        }
+
+        public static Color BordureBoiteEffective(string hexa, string fondBoite)
+        {
+            if (BoiteSubstituee(fondBoite) && EstUsine(hexa, "#B8B2A7")) return Color.FromRgb(0x4C, 0x5A, 0x6E);
+            return CouleurDepuis(hexa, Color.FromRgb(0xB8, 0xB2, 0xA7));
+        }
+
+        /// <summary>La couleur d'un texte : dans une boîte rendue en sombre, le noir
+        /// d'usine (ou l'absence de couleur) devient clair.</summary>
+        public static Color TexteEffectif(string hexa, bool boiteSombre)
+        {
+            if (boiteSombre && (string.IsNullOrEmpty(hexa) || EstUsine(hexa, "#1C1B19"))) return Color.FromRgb(0xE8, 0xEA, 0xED);
+            return CouleurDepuis(hexa, Color.FromRgb(0x1C, 0x1B, 0x19));
+        }
+
         public static string HexaDepuisCouleur(Color couleur)
         {
             return string.Format("#{0:X2}{1:X2}{2:X2}", couleur.R, couleur.G, couleur.B);

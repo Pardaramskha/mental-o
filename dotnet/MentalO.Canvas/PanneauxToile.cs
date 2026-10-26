@@ -170,7 +170,7 @@ namespace Mentalo.Vue
                 });
                 foreach (DefinitionAction action in ParametresGlobaux.Actions)
                 {
-                    if (!ParametresGlobaux.Favoris.Contains(action.Id)) continue;
+                    if (!ParametresGlobaux.Favoris.Contains(action.Id) || ParametresGlobaux.EstMasquee(action.Id)) continue;
                     contenu.Children.Add(new TextBlock
                     {
                         Text = action.Nom + " : " + ParametresGlobaux.AfficherGeste(ParametresGlobaux.Geste(action.Id)),

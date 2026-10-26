@@ -55,10 +55,17 @@ namespace Mentalo.Vue
             Historique.ExecuterEtPousser(commandes.Count == 1 ? commandes[0] : new CommandeComposite(commandes));
         }
 
+        /// <summary>Un segment « à la couleur par défaut » : celle du document, ou aucune
+        /// (segment relu d'un vieux fichier sans couleur) — les deux suivent le thème (26/10/2026).</summary>
+        private static bool CouleurParDefaut(Segment s, string couleur)
+        {
+            return string.IsNullOrEmpty(s.Couleur) || string.Equals(s.Couleur, couleur, System.StringComparison.OrdinalIgnoreCase);
+        }
+
         private static bool PorteCouleur(Noeud noeud, string couleur)
         {
-            foreach (Segment s in noeud.Segments) if (string.Equals(s.Couleur, couleur, System.StringComparison.OrdinalIgnoreCase)) return true;
-            foreach (Segment s in noeud.SegmentsApres) if (string.Equals(s.Couleur, couleur, System.StringComparison.OrdinalIgnoreCase)) return true;
+            foreach (Segment s in noeud.Segments) if (CouleurParDefaut(s, couleur)) return true;
+            foreach (Segment s in noeud.SegmentsApres) if (CouleurParDefaut(s, couleur)) return true;
             return false;
         }
 
@@ -66,7 +73,7 @@ namespace Mentalo.Vue
         {
             List<Segment> copie = Noeud.CopieDe(segments);
             foreach (Segment s in copie)
-                if (string.Equals(s.Couleur, de, System.StringComparison.OrdinalIgnoreCase)) s.Couleur = vers;
+                if (CouleurParDefaut(s, de)) s.Couleur = vers;
             return copie;
         }
 

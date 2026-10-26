@@ -77,8 +77,15 @@ namespace Mentalo.Vue
         /// <summary>Fabrique du menu contextuel de formatage, fournie par la toile.</summary>
         public Func<ContextMenu> FabriqueMenuContextuel { get; set; }
 
-        /// <summary>La barre de formatage : y déplacer le focus ne clôt pas l'édition.</summary>
-        public static Visual ZoneFormatage { get; set; }
+        /// <summary>Les zones de formatage (la barre de personnalisation, l'inspecteur
+        /// du rail de Marabook…) : y déplacer le focus ne clôt pas l'édition.</summary>
+        public static readonly List<Visual> ZonesFormatage = new List<Visual>();
+
+        /// <summary>LE RENDU D'UN LIEN VERS L'HÔTE (26/10/2026) : posé par l'hôte
+        /// (Marabook) ; reçoit la pièce « hote:<cible> » et rend la ligne de lien ou
+        /// la tuile de l'élément visé. Null (Mental-O seul, ou rien à rendre) : une
+        /// ligne de lien ordinaire portant le nom enregistré.</summary>
+        public static Func<PieceJointe, Control> RenduHote { get; set; }
 
         /// <summary>Vrai pendant un dialogue ou un menu de formatage : la perte de focus
         /// de l'éditeur ne clôt pas l'édition.</summary>
@@ -90,9 +97,10 @@ namespace Mentalo.Vue
         public event Action<NoeudVisuel, ResultatEdition> EditionTerminee;
         public event Action SelectionEditeurChangee;
 
-        /// <summary>Clic (gauche ou droit) sur un lien de fichier : la toile ouvre le menu
-        /// des actions (ouvrir, renommer, intégrer…) ancré sur l'élément fourni.</summary>
-        public event Action<NoeudVisuel, PieceJointe, Control> FichierClique;
+        /// <summary>Clic (gauche ou droit — le booléen dit « droit ») sur un lien de
+        /// fichier : la toile ouvre le menu des actions (ouvrir, renommer, intégrer…)
+        /// ancré sur l'élément fourni ; un lien vers l'hôte s'ouvre au clic gauche.</summary>
+        public event Action<NoeudVisuel, PieceJointe, Control, bool> FichierClique;
 
         /// <summary>Clic sur une case à cocher (v0.15) : (visuel, dans le texte après l'image ?, index de ligne).</summary>
         public event Action<NoeudVisuel, bool, int> CaseCliquee;
@@ -196,6 +204,10 @@ namespace Mentalo.Vue
             editeur.Padding = new Thickness(0);
             editeur.AcceptsReturn = true;
             editeur.AcceptsTab = false;
+            // Entrée insère « \n » (26/10/2026) : le défaut d'Avalonia est le retour de
+            // la plateforme, « \r\n » sous Windows — le « \r » restait dans le modèle et
+            // rendait une ligne vide de plus à chaque retour (boîte espacée, agrandie).
+            editeur.NewLine = "\n";
             editeur.TextWrapping = TextWrapping.Wrap;
             editeur.IsVisible = false;
             editeur.Cursor = Ui.CurseurTexte;
@@ -206,8 +218,22 @@ namespace Mentalo.Vue
                 if (!_enEdition || _synchro) return;
                 if (e.Property == TextBox.TextProperty)
                 {
+                    string texte = editeur.Text ?? "";
+                    if (texte.IndexOf('\r') >= 0)
+                    {
+                        // Un collage apporte des « \r\n » : le modèle ne connaît que « \n ».
+                        int caret = editeur.CaretIndex;
+                        int retires = 0;
+                        for (int i = 0; i < Math.Min(caret, texte.Length); i++)
+                            if (texte[i] == '\r' && i + 1 < texte.Length && texte[i + 1] == '\n') retires++;
+                        texte = texte.Replace("\r\n", "\n").Replace('\r', '\n');
+                        _synchro = true;
+                        editeur.Text = texte;
+                        _synchro = false;
+                        editeur.CaretIndex = Math.Max(0, Math.Min(texte.Length, caret - retires));
+                    }
                     EditeurSegments cible = ReferenceEquals(expediteur, _editeurApres) ? _segmentsEditionApres : _segmentsEdition;
-                    if (cible != null) cible.Synchroniser(editeur.Text, editeur.CaretIndex);
+                    if (cible != null) cible.Synchroniser(texte, editeur.CaretIndex);
                 }
                 if (e.Property == TextBox.TextProperty || e.Property == TextBox.SelectionStartProperty
                     || e.Property == TextBox.SelectionEndProperty || e.Property == TextBox.CaretIndexProperty)
@@ -243,7 +269,7 @@ namespace Mentalo.Vue
             double opacite = Math.Max(0.15, Math.Min(1.0, Modele.Opacite > 0 ? Modele.Opacite : 1));
             Opacity = _estompe ? opacite * 0.15 : opacite;
 
-            _fond.Background = new SolidColorBrush(Palette.CouleurDepuis(Modele.FondCouleur, Colors.White));
+            _fond.Background = new SolidColorBrush(Palette.FondBoiteEffectif(Modele.FondCouleur));
             _fond.CornerRadius = new CornerRadius(Modele.Rayon);
             _cadre.RadiusX = Modele.Rayon;
             _cadre.RadiusY = Modele.Rayon;
@@ -323,6 +349,7 @@ namespace Mentalo.Vue
                 _affichage.IsVisible = aTexte || !image;
                 _affichageApres.IsVisible = image && Modele.SegmentsApres.Count > 0;
             }
+            TexteRiche.ContexteSombre = Palette.BoiteSubstituee(Modele.FondCouleur); // thème sombre de l'hôte sur une boîte d'usine
             _affichage.Children.Clear();
             foreach (TextBlock bloc in TexteRiche.ConstruireBlocsLignes(Modele.Segments, Modele.Alignement,
                 delegate(int ligne) { SignalerCase(false, ligne); }))
@@ -333,6 +360,7 @@ namespace Mentalo.Vue
             foreach (TextBlock bloc in TexteRiche.ConstruireBlocsLignes(Modele.SegmentsApres, Modele.Alignement,
                 delegate(int ligne) { SignalerCase(true, ligne); }))
                 _affichageApres.Children.Add(bloc);
+            TexteRiche.ContexteSombre = false;
 
             // Étiquettes : puces colorées, alignées comme le texte.
             _etiquettes.Children.Clear();
@@ -405,6 +433,15 @@ namespace Mentalo.Vue
         /// et remonté à la toile par FichierClique.</summary>
         private Control ConstruireLigneFichier(PieceJointe piece, string alignement)
         {
+            if (piece.EstLienHote && RenduHote != null)
+            {
+                // Un lien vers l'hôte : c'est lui qui le rend (ligne de lien au titre
+                // courant de l'élément, ou sa tuile) ; le clic remonte comme pour un fichier.
+                Control rendu = null;
+                try { rendu = RenduHote(piece); }
+                catch { rendu = null; }
+                if (rendu != null) return CadreFichier(piece, rendu, alignement, piece.Affichage == null, null);
+            }
             bool manquant = !piece.EstIntegre && !piece.OrigineDisponible;
             IBrush encre = manquant ? PinceauLienManquant : PinceauLien;
             double taille = Segment.TailleDefaut;
@@ -427,24 +464,35 @@ namespace Mentalo.Vue
             };
             if (manquant) libelle.FontStyle = FontStyle.Italic;
             ligne.Children.Add(libelle);
+            return CadreFichier(piece, ligne, alignement, true, InfobulleFichier(piece, manquant));
+        }
 
+        /// <summary>Le cadre cliquable d'une pièce : fond transparent pour recevoir les
+        /// clics (absorbés : pas de déplacement de la boîte), survol surligné pour une
+        /// ligne de lien, le clic remonté à la toile par FichierClique.</summary>
+        private Border CadreFichier(PieceJointe piece, Control contenu, string alignement, bool survol, string infobulle)
+        {
             Border cadre = new Border
             {
-                Background = Brushes.Transparent, // un fond, même transparent, pour recevoir les clics
-                Padding = new Thickness(3, 1, 5, 1),
+                Background = Brushes.Transparent,
+                Padding = survol ? new Thickness(3, 1, 5, 1) : new Thickness(0, 2, 0, 2),
                 CornerRadius = new CornerRadius(3),
                 Cursor = Ui.CurseurMain,
-                Child = ligne,
+                Child = contenu,
                 HorizontalAlignment = TexteRiche.AlignementHorizontal(alignement)
             };
-            Ui.Infobulle(cadre, InfobulleFichier(piece, manquant));
-            cadre.PointerEntered += delegate { cadre.Background = PinceauLienSurvol; };
-            cadre.PointerExited += delegate { cadre.Background = Brushes.Transparent; };
+            if (!string.IsNullOrEmpty(infobulle)) Ui.Infobulle(cadre, infobulle);
+            if (survol)
+            {
+                cadre.PointerEntered += delegate { cadre.Background = PinceauLienSurvol; };
+                cadre.PointerExited += delegate { cadre.Background = Brushes.Transparent; };
+            }
             cadre.PointerPressed += delegate(object expediteur, PointerPressedEventArgs e)
             {
                 e.Handled = true;
-                Action<NoeudVisuel, PieceJointe, Control> h = FichierClique;
-                if (h != null) h(this, piece, cadre);
+                bool droit = e.GetCurrentPoint(cadre).Properties.IsRightButtonPressed;
+                Action<NoeudVisuel, PieceJointe, Control, bool> h = FichierClique;
+                if (h != null) h(this, piece, cadre, droit);
             };
             return cadre;
         }
@@ -490,8 +538,7 @@ namespace Mentalo.Vue
             }
             else if (epaisseur > 0)
             {
-                _cadre.Stroke = new SolidColorBrush(
-                    Palette.CouleurDepuis(Modele.BordureCouleur, Color.FromRgb(0xB8, 0xB2, 0xA7)));
+                _cadre.Stroke = new SolidColorBrush(Palette.BordureBoiteEffective(Modele.BordureCouleur, Modele.FondCouleur));
                 _cadre.StrokeThickness = epaisseur;
             }
             else
@@ -553,7 +600,7 @@ namespace Mentalo.Vue
             Segment premier = source.Count > 0 ? source[0] : null;
             editeur.FontFamily = TexteRiche.Police(premier != null ? premier.Police : Segment.PoliceDefaut);
             editeur.FontSize = premier != null && premier.Taille > 0 ? premier.Taille : Segment.TailleDefaut;
-            editeur.Foreground = new SolidColorBrush(Palette.CouleurDepuis(premier != null ? premier.Couleur : Segment.CouleurDefaut, Colors.Black));
+            editeur.Foreground = new SolidColorBrush(Palette.TexteEffectif(premier != null ? premier.Couleur : Segment.CouleurDefaut, Palette.BoiteSubstituee(Modele.FondCouleur)));
             editeur.TextAlignment = TexteRiche.ConvertirAlignement(Modele.Alignement);
             _synchro = true;
             editeur.Text = segments.Texte;
@@ -651,6 +698,7 @@ namespace Mentalo.Vue
             editeur.CaretIndex = Math.Max(0, Math.Min((editeur.Text ?? "").Length, caret));
         }
 
+
         private void EditeurFocusPerdu(object expediteur, Avalonia.Interactivity.RoutedEventArgs e)
         {
             if (!_enEdition) return;
@@ -678,7 +726,7 @@ namespace Mentalo.Vue
             Visual visuel = focus as Visual;
             while (visuel != null)
             {
-                if (ReferenceEquals(visuel, ZoneFormatage)) return true;
+                if (ZonesFormatage.Contains(visuel)) return true;
                 if (visuel is MenuItem || visuel is ContextMenu || visuel is Avalonia.Controls.Primitives.Popup) return true;
                 visuel = visuel.GetVisualParent();
             }

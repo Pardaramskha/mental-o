@@ -32,6 +32,42 @@ namespace Mentalo.Modele
         /// <summary>Un hyperlien web (v0.15) : Chemin porte l'adresse, rien n'est intégrable.</summary>
         public bool EstUrl { get { return EstAdresseWeb(Chemin); } }
 
+        /// <summary>LE SCHÉMA D'UN LIEN VERS L'HÔTE (26/10/2026) : « hote:<cible> ».
+        /// Quand Mental-O vit en DLC, une boîte peut pointer vers un élément de
+        /// l'application hôte (une fiche, un écrit, une tuile de Marabook) ; la
+        /// cible est l'identifiant que l'hôte sait rouvrir. Le canevas ne l'ouvre
+        /// pas lui-même : il la tend à l'hôte (ToileVue.OuvrirHote) et lui demande
+        /// son rendu (NoeudVisuel.RenduHote).</summary>
+        public const string SchemaHote = "hote:";
+
+        public bool EstLienHote
+        {
+            get { return !string.IsNullOrEmpty(Chemin) && Chemin.StartsWith(SchemaHote, StringComparison.Ordinal); }
+        }
+
+        /// <summary>La cible d'un lien vers l'hôte (ce qui suit « hote: ») ; null sinon.</summary>
+        public string CibleHote
+        {
+            get { return EstLienHote ? Chemin.Substring(SchemaHote.Length) : null; }
+        }
+
+        /// <summary>Comment un lien vers l'hôte se présente dans la boîte : null =
+        /// une ligne de lien (comme un fichier), « normal » = la tuile de l'élément
+        /// telle qu'elle apparaît dans son tableau, « condense » = titre et couleur
+        /// seulement. Enregistré dans le .tea (« affichage »).</summary>
+        public string Affichage { get; set; }
+
+        /// <summary>Fabrique un lien vers un élément de l'hôte.</summary>
+        public static PieceJointe DepuisHote(string cible, string nom, string affichage)
+        {
+            PieceJointe piece = new PieceJointe();
+            piece.Chemin = SchemaHote + (cible ?? "");
+            piece.NomFichier = "";
+            piece.Nom = nom ?? "";
+            piece.Affichage = string.IsNullOrEmpty(affichage) ? null : affichage;
+            return piece;
+        }
+
         public static bool EstAdresseWeb(string texte)
         {
             if (string.IsNullOrEmpty(texte)) return false;
@@ -70,7 +106,7 @@ namespace Mentalo.Modele
         {
             get
             {
-                if (EstUrl) return "";
+                if (EstUrl || EstLienHote) return "";
                 string source = !string.IsNullOrEmpty(NomFichier) ? NomFichier : Chemin;
                 if (string.IsNullOrEmpty(source)) return "";
                 try { return Path.GetExtension(source).ToLowerInvariant(); }
@@ -84,7 +120,7 @@ namespace Mentalo.Modele
             get
             {
                 if (string.IsNullOrEmpty(Chemin)) return false;
-                if (EstUrl) return true; // on ne sonde pas le réseau : l'adresse vaut disponibilité
+                if (EstUrl || EstLienHote) return true; // on ne sonde pas le réseau : l'adresse vaut disponibilité
                 try { return File.Exists(Chemin); }
                 catch { return false; }
             }
@@ -115,6 +151,7 @@ namespace Mentalo.Modele
             copie.Chemin = Chemin;
             copie.NomFichier = NomFichier;
             copie.Donnees = Donnees;
+            copie.Affichage = Affichage;
             return copie;
         }
 
@@ -132,7 +169,7 @@ namespace Mentalo.Modele
         public string TailleLisible()
         {
             long octets = -1;
-            if (EstUrl) return "";
+            if (EstUrl || EstLienHote) return "";
             if (Donnees != null) octets = Donnees.LongLength;
             else if (OrigineDisponible)
             {

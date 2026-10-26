@@ -196,6 +196,7 @@ namespace Mentalo.Vue
             string categorieCourante = null;
             foreach (DefinitionAction action in ParametresGlobaux.Actions)
             {
+                if (ParametresGlobaux.EstMasquee(action.Id)) continue; // écartée par l'hôte (DLC)
                 if (action.Categorie != categorieCourante)
                 {
                     categorieCourante = action.Categorie;
