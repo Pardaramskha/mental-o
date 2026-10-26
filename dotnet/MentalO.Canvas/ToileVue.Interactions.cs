@@ -347,7 +347,7 @@ namespace Mentalo.Vue
             if (_rectangleActif && gaucheEnfonce)
             {
                 Point p = e.GetPosition(_canvas);
-                Rect zone = new Rect(_rectangleDepart, p);
+                Rect zone = RectEntre(_rectangleDepart, p);
                 Canvas.SetLeft(_rectangleSelection, zone.X);
                 Canvas.SetTop(_rectangleSelection, zone.Y);
                 _rectangleSelection.Width = zone.Width;
@@ -450,7 +450,7 @@ namespace Mentalo.Vue
                 _rectangleActif = false;
                 _rectangleSelection.IsVisible = false;
                 Point p = e.GetPosition(_canvas);
-                Rect zone = new Rect(_rectangleDepart, p);
+                Rect zone = RectEntre(_rectangleDepart, p);
                 bool ajout = (e.KeyModifiers & KeyModifiers.Control) != 0;
                 bool retrait = (e.KeyModifiers & KeyModifiers.Alt) != 0; // Alt : désélectionner ce qui est touché
                 if (zone.Width < 4 && zone.Height < 4)
@@ -705,6 +705,8 @@ namespace Mentalo.Vue
         public void ZoomAvant() { ZoomVers(_echelle.ScaleX * 1.2, CentreVue()); }
         public void ZoomArriere() { ZoomVers(_echelle.ScaleX / 1.2, CentreVue()); }
         public void ZoomReinitialiser() { ZoomVers(1.0, CentreVue()); }
+        /// <summary>Un zoom imposé (le curseur de zoom de Marabook), autour du centre de la vue.</summary>
+        public void DefinirZoom(double echelle) { ZoomVers(echelle, CentreVue()); }
 
         private Point CentreVue()
         {

@@ -17,38 +17,32 @@ namespace Mentalo
 {
     /// <summary>La fenêtre de Mental-O seul : menus, barre des modes, barre de
     /// personnalisation (Texte / Boîte / Groupe / Lien), toile, panneaux flottants,
-    /// barre d'état. Portage Avalonia (26/10/2026) de la fenêtre WPF.</summary>
+    /// barre d'état. Portage Avalonia (26/10/2026) de la fenêtre WPF. Les barres
+    /// et les panneaux sont ceux de la toile (BarresToile, PanneauxFlottants),
+    /// partagés avec le DLC Marabook ; la fenêtre n'ajoute que les menus, le
+    /// thème, le plein écran, le laser, les fichiers et les mises à jour.</summary>
     public partial class FenetrePrincipale : Window
     {
         private readonly ToileVue _toile;
+        private readonly BarresToile _barres;
+        private readonly PanneauxFlottants _panneaux;
         private readonly TextBlock _texteZoom;
         private string _cheminFichier;
         private bool _modifie;
         private bool _fermetureConfirmee;
 
-        // Barre de formatage
-        private Border _barreFormat;
-        private ComboBox _comboPolice, _comboTaille, _comboCouleur, _comboSurlignage;
-        private ToggleButton _btnGras, _btnItalique, _btnSouligne, _btnBarre;
-        private ToggleButton _btnAlignGauche, _btnAlignCentre, _btnAlignDroite;
-        private bool _synchroEnCours;
-
         private MenuItem _menuFocus, _menuFiltre, _menuAnnuler, _menuRetablir;
-        private Border _panneauFiltre;
-        private StackPanel _filtreContenu;
 
         // Copies de secours (v0.16) : une clé par carte ouverte, une copie par minute si modifiée.
         private string _cleSecours = Secours.NouvelleCle();
         private bool _modifieDepuisSecours;
 
-        // Présentation (v0.17) : pointeur laser et compteur de diapositives ; modèles de cartes.
+        // Présentation (v0.17) : pointeur laser ; modèles de cartes.
         private Grid _zoneCentrale;
         private Canvas _calqueLaser;
         private Border _laser;
         private bool _laserActif;
         private Point _dernierPointeur;
-        private Border _compteurPresentation;
-        private TextBlock _compteurPresentationTexte;
         private MenuItem _menuModeles;
 
         // Plein écran et mode présentation
@@ -56,7 +50,7 @@ namespace Mentalo
         private WindowState _etatAvantPleinEcran = WindowState.Normal;
         private string _modeAvantPresentation;
         private Menu _menuPrincipal;
-        private Border _barreModes, _barreEtat;
+        private Border _barreModes, _barreFormat, _barreEtat;
         private MenuItem _menuPleinEcran, _menuPresentation;
 
         // Mises à jour (menu Aide) : la version trouvée au lancement, s'il y en a une plus récente
@@ -64,42 +58,13 @@ namespace Mentalo
         private MiseAJour.Info _maj;
         private readonly TextBlock _texteMaj = new TextBlock();
 
-        // Barre de recherche
-        private Border _barreRecherche;
-        private TextBox _champRecherche;
-        private TextBlock _compteurRecherche;
-        private List<Noeud> _resultatsRecherche = new List<Noeud>();
-        private int _indiceRecherche;
-
-        // Barre de modes
-        private ToggleButton _btnModeAuto, _btnModeDeplacement, _btnModeLiens, _btnModeLecture;
-        private ToggleButton _epingleOnglet;
+        // Barre de modes : le bouton de thème, à l'opposé des modes
         private Button _boutonTheme;
-        private TextBlock _texteMode;
 
-        // Barre de personnalisation unique (onglets Texte / Boîte / Groupe / Lien)
-        private StackPanel _panneauTexte, _panneauBoites, _panneauGroupes, _panneauLiens;
-        private ToggleButton _ongletTexte, _ongletBoite, _ongletGroupe, _ongletLien;
-        private string _ongletActif = "texte";
-        private ComboBox _comboFond, _comboBordureCouleur, _comboBordureEpaisseur, _comboBordureTrait, _comboCoins;
-        private ComboBox _comboOmbre, _comboOpacite;
-        private ComboBox _comboCouleurGroupe, _comboPositionTitre;
-        private ComboBox _comboTraitGroupe, _comboEpaisseurGroupe, _comboCouleurTitre, _comboFondTitre, _comboTailleTitre;
-        private TextBox _champTitreGroupe;
-        private ComboBox _comboCouleurLien, _comboEpaisseurLien, _comboTraitLien, _comboFlecheLien, _comboTraceLien;
-        private TextBox _champEtiquetteLien;
-
-        // Panneaux flottants
-        private Border _tust;
-        private StackPanel _tustContenu;
+        // Panneaux flottants : les coches du menu Fenêtres
         private MenuItem _menuTust, _menuMiniCarte, _menuInspecteur, _menuHistorique;
         private MenuItem _menuRecents;
-        private Border _miniCarte, _inspecteur, _panneauHistorique;
         private Grid _vignette;
-        private Canvas _miniCanvas;
-        private TextBlock _inspecteurTexte, _historiqueTexte;
-        private double _miniEchelle = 1;
-        private Point _miniOrigine;
         private Dictionary<string, Action> _actions;
 
         public FenetrePrincipale()
@@ -125,6 +90,9 @@ namespace Mentalo
             {
                 _texteZoom.Text = string.Format("Zoom : {0:0} %", zoom * 100);
             };
+            IHabillage habillage = new HabillageStandard();
+            _barres = new BarresToile(_toile, habillage);
+            _panneaux = new PanneauxFlottants(_toile, delegate { return this; }, habillage, true);
 
             DockPanel racine = new DockPanel();
             _menuPrincipal = ConstruireMenu();
@@ -134,23 +102,7 @@ namespace Mentalo
             DockPanel.SetDock(_barreModes, Dock.Top);
             racine.Children.Add(_barreModes);
             // Barre de personnalisation unique : son contenu suit les onglets de la barre des modes.
-            _panneauTexte = ConstruirePanneauTexte();
-            _panneauBoites = ConstruirePanneauBoites();
-            _panneauGroupes = ConstruirePanneauGroupes();
-            _panneauLiens = ConstruirePanneauLiens();
-            _barreFormat = new Border
-            {
-                BorderThickness = new Thickness(0, 0, 0, 1),
-                BorderBrush = Chrome.Bordure,
-                Background = Chrome.FondBarre,
-                MinHeight = 52,
-                Child = new ScrollViewer
-                {
-                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-                    VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                    Content = _panneauTexte
-                }
-            };
+            _barreFormat = _barres.ConstruireBarreFormat();
             DockPanel.SetDock(_barreFormat, Dock.Top);
             racine.Children.Add(_barreFormat);
             _barreEtat = ConstruireBarreEtat();
@@ -161,49 +113,19 @@ namespace Mentalo
             zoneCentrale.Children.Add(_toile);
             _vignette = ConstruireVignette();
             zoneCentrale.Children.Add(_vignette);
-            _barreRecherche = ConstruireBarreRecherche();
-            zoneCentrale.Children.Add(_barreRecherche);
-            _tust = ConstruireTust();
-            zoneCentrale.Children.Add(_tust);
-            _miniCarte = ConstruireMiniCarte();
-            zoneCentrale.Children.Add(_miniCarte);
-            _inspecteur = ConstruireInspecteur();
-            zoneCentrale.Children.Add(_inspecteur);
-            _panneauHistorique = ConstruireHistorique();
-            zoneCentrale.Children.Add(_panneauHistorique);
-            _panneauFiltre = ConstruirePanneauFiltre();
-            zoneCentrale.Children.Add(_panneauFiltre);
-            _compteurPresentation = ConstruireCompteurPresentation();
-            zoneCentrale.Children.Add(_compteurPresentation);
+            _panneaux.AjouterA(zoneCentrale);
             _calqueLaser = ConstruireLaser();
             zoneCentrale.Children.Add(_calqueLaser);
             racine.Children.Add(zoneCentrale);
             Content = racine;
-            SelectionOnglet("texte");
 
             NoeudVisuel.ZoneFormatage = _barreFormat;
-            _toile.FormatCibleChange += MettreAJourBarreFormat;
 
             BrancherActions();
             AddHandler(KeyDownEvent, ToucheEnfoncee, Avalonia.Interactivity.RoutingStrategies.Tunnel);
             AddHandler(KeyUpEvent, ToucheRelachee, Avalonia.Interactivity.RoutingStrategies.Tunnel);
-            _toile.DiapositiveChangee += delegate(int courante, int total)
-            {
-                if (_compteurPresentationTexte == null) return;
-                _compteurPresentationTexte.Text = courante == 0
-                    ? (total == 0 ? "Vue d'ensemble" : "Vue d'ensemble · " + total + " diapositive" + (total > 1 ? "s" : "") + " — → pour commencer")
-                    : courante + " / " + total;
-            };
 
-            _toile.VueChangee += MettreAJourMiniCarte;
-            _toile.DocumentModifie += delegate
-            {
-                MettreAJourMiniCarte();
-                MettreAJourInspecteur();
-            };
-            _toile.Historique.Change += MettreAJourHistorique;
             _toile.Historique.Change += MettreAJourMenusEdition;
-            _toile.EtiquettesChange += MettreAJourPanneauFiltre;
             _toile.EstompageChange += delegate
             {
                 if (_menuFocus != null) Ui.Cocher(_menuFocus, _toile.FocusActif);
@@ -244,8 +166,7 @@ namespace Mentalo
 
             _texteZoom.Text = "Zoom : 100 %";
             _toile.AppliquerFondDocument(); // le fond suit le thème dès la carte vierge
-            MettreAJourBarreFormat();
-            MettreAJourTust();
+            _barres.MettreAJourFormat();
             MettreAJourPanneaux();
             MettreAJourTitre();
             MettreAJourMenusEdition();
@@ -291,55 +212,6 @@ namespace Mentalo
             if (!await ConfirmerAbandon()) return;
             _fermetureConfirmee = true;
             Close();
-        }
-
-        private void SelectionOnglet(string nom)
-        {
-            _ongletActif = nom;
-            if (_ongletTexte == null) return;
-            _ongletTexte.IsChecked = nom == "texte";
-            _ongletBoite.IsChecked = nom == "boite";
-            _ongletGroupe.IsChecked = nom == "groupe";
-            _ongletLien.IsChecked = nom == "lien";
-            ScrollViewer defilement = _barreFormat == null ? null : _barreFormat.Child as ScrollViewer;
-            if (defilement != null)
-                defilement.Content = nom == "boite" ? (Control)_panneauBoites
-                    : nom == "groupe" ? _panneauGroupes
-                    : nom == "lien" ? _panneauLiens
-                    : _panneauTexte;
-        }
-
-        /// <summary>Un symbole texte dans un bouton (remplace les glyphes Segoe MDL2, propres à Windows).</summary>
-        private static TextBlock Glyphe(string symbole, double taille)
-        {
-            return new TextBlock
-            {
-                Text = symbole,
-                FontSize = taille,
-                Foreground = Chrome.Encre,
-                VerticalAlignment = VerticalAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Center
-            };
-        }
-
-        /// <summary>Empile une petite étiquette au-dessus d'un contrôle de barre d'outils.</summary>
-        private static StackPanel AvecEtiquette(string etiquette, Control controle)
-        {
-            StackPanel pile = new StackPanel
-            {
-                Margin = new Thickness(0, 0, 5, 0),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            pile.Children.Add(new TextBlock
-            {
-                Text = etiquette,
-                FontSize = 10,
-                Foreground = Chrome.TexteDoux,
-                Margin = new Thickness(2, 0, 0, 1)
-            });
-            controle.Margin = new Thickness(0);
-            pile.Children.Add(controle);
-            return pile;
         }
 
         // ------------------------------------------------------------------ construction du menu
@@ -753,7 +625,7 @@ namespace Mentalo
                 if (_presentation) { QuitterPresentation(); e.Handled = true; }
                 else if (_pleinEcran) { DefinirPleinEcran(false); e.Handled = true; }
                 else if (_toile.FocusActif) { _toile.AnnulerFocus(); e.Handled = true; }
-                else if (_barreRecherche.IsVisible) { FermerRecherche(); e.Handled = true; }
+                else if (_panneaux.RechercheVisible) { FermerRecherche(); e.Handled = true; }
                 else { _toile.Deselectionner(); e.Handled = true; }
             }
             else if (e.KeyModifiers == KeyModifiers.None)

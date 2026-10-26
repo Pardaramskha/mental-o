@@ -155,7 +155,11 @@ namespace MentalO.Marabook
             onglets.MinHeight = 420;
             panel.Children.Add(onglets);
             // Les réglages s'écrivent en quittant l'onglet (ou le dialogue).
-            panel.DetachedFromVisualTree += delegate { Mentalo.Parametres.ParametresGlobaux.Enregistrer(); };
+            panel.DetachedFromVisualTree += delegate
+            {
+                Mentalo.Parametres.ParametresGlobaux.Enregistrer();
+                if (MindMapEditor.Courant != null) MindMapEditor.Courant.RafraichirParametres();
+            };
             return panel;
         }
     }

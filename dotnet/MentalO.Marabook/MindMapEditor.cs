@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -13,113 +12,117 @@ using Mentalo.Modele;
 using Mentalo.Parametres;
 using Mentalo.Persistance;
 using Mentalo.Vue;
-using Chrome = Marabook.App.Chrome; // le chrome de Marabook, pas celui de Mental-O
+using Chrome = global::Marabook.App.Chrome; // le chrome de Marabook, pas celui de Mental-O
 using Ui = Mentalo.Vue.Ui;
 
 namespace MentalO.Marabook
 {
-    /// <summary>L'ÉDITEUR DE CARTE À LA SAUCE MARABOOK (26/10/2026) : la toile de
-    /// Mental-O (le même canevas que l'application seule) sous une barre d'outils
-    /// faite avec les boutons et les icônes de Marabook — boîtes, contenu, texte,
-    /// groupes, disposition, modes, vue, thème, export, annulation — et les
-    /// panneaux (mini-carte, inspecteur, historique, filtre, Tust) en
-    /// flottants, comme dans Mental-O seul. Les raccourcis sont ceux de
-    /// Fichier > Paramètres de Mental-O (onglet « Mental-O (dlc) » des
-    /// Préférences) : dans Mental-O seul, c'est la fenêtre qui les porte. La
-    /// carte arrive en octets .tea et repart en octets .tea
-    /// (Fichier.EnregistrerEnMemoire garde l'historique des versions).</summary>
+    /// <summary>L'ÉDITEUR DE CARTE À LA SAUCE MARABOOK (26/10/2026, refondu le
+    /// soir même) : la même disposition que Mental-O seul — une barre d'actions
+    /// (ce que portent les menus Édition / Insertion / Affichage / Fenêtres de
+    /// l'application, en boutons-menus de Marabook), la barre des modes avec
+    /// les onglets Texte / Boîte / Groupe / Lien, la barre de personnalisation,
+    /// puis la toile et ses panneaux flottants (mini-carte, inspecteur,
+    /// historique, filtre, Tust, recherche). Barres et panneaux sont ceux de la
+    /// toile (BarresToile, PanneauxFlottants), habillés aux couleurs et aux
+    /// boutons de Marabook. Le zoom vit dans la barre d'état de Marabook, au
+    /// même endroit que celui des pages (IMindMapEditor.Zoom). Les raccourcis
+    /// sont ceux de Préférences > Mental-O (dlc). La carte arrive en octets
+    /// .tea et repart en octets .tea.</summary>
     public class MindMapEditor : IMindMapEditor
     {
         /// <summary>L'éditeur affiché (un seul par session Marabook).</summary>
         public static MindMapEditor Courant;
 
         private readonly IModuleHost _host;
+        private readonly HabillageMarabook _habillage = new HabillageMarabook();
         private readonly Grid _root;
         private readonly Grid _centre;
         private readonly ToileVue _toile;
-        private readonly WrapPanel _bar;
-        private readonly Border _barHost;
-        private readonly List<ToggleButton> _modes = new List<ToggleButton>();
-        private readonly TextBlock _zoomLabel;
+        private readonly BarresToile _barres;
+        private readonly PanneauxFlottants _panneaux;
+        private readonly Border _barreActions, _barreModes, _barreFormat;
         private Button _undo, _redo;
-        private Border _miniCarte, _inspecteur, _historique, _filtre, _tust, _compteur, _recherche;
-        private Canvas _miniCanvas;
-        private TextBlock _inspecteurTexte, _historiqueTexte, _compteurTexte, _compteurRecherche;
-        private StackPanel _filtreContenu, _tustContenu;
-        private TextBox _champRecherche;
-        private List<Noeud> _resultats = new List<Noeud>();
-        private int _indiceResultat;
-        private double _miniEchelle = 1;
-        private Point _miniOrigine;
         private string _itemId;
         private bool _dirty, _loading, _presenting;
         private string _modeAvantPresentation;
         private byte[] _derniersOctets;
 
         public event Action Changed;
+        public event Action<double> ZoomChanged;
 
         public MindMapEditor(IModuleHost host)
         {
             _host = host;
             Courant = this;
+            _toile = new ToileVue();
+            _barres = new BarresToile(_toile, _habillage);
+            _panneaux = new PanneauxFlottants(_toile, delegate { return _host.MainWindow; }, _habillage, false);
+
             _root = new Grid { Background = Chrome.WindowBg };
+            _root.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            _root.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
             _root.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
             _root.RowDefinitions.Add(new RowDefinition(GridLength.Star));
 
-            _bar = new WrapPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Margin = new Thickness(10, 6, 10, 6)
-            };
-            _barHost = new Border
-            {
-                Background = Chrome.BarBg,
-                BorderBrush = Chrome.Border,
-                BorderThickness = new Thickness(0, 0, 0, 1),
-                Child = _bar
-            };
-            Grid.SetRow(_barHost, 0);
-            _root.Children.Add(_barHost);
+            _barreActions = Barre(ConstruireBarreActions(), Chrome.BarBg);
+            Grid.SetRow(_barreActions, 0);
+            _root.Children.Add(_barreActions);
+
+            _barreModes = Barre(_barres.ConstruirePanneauModes(), Chrome.BarBgLight);
+            Grid.SetRow(_barreModes, 1);
+            _root.Children.Add(_barreModes);
+
+            _barreFormat = _barres.ConstruireBarreFormat();
+            Grid.SetRow(_barreFormat, 2);
+            _root.Children.Add(_barreFormat);
 
             _centre = new Grid();
-            Grid.SetRow(_centre, 1);
+            Grid.SetRow(_centre, 3);
             _root.Children.Add(_centre);
-
-            _toile = new ToileVue();
             _centre.Children.Add(_toile);
+            _panneaux.AjouterA(_centre);
+
+            // Les combos et bascules des barres ne terminent pas l'édition d'une boîte.
+            NoeudVisuel.ZoneFormatage = _root;
+
             _toile.DocumentModifie += delegate
             {
                 if (_loading) return;
                 _dirty = true;
                 Action handler = Changed;
                 if (handler != null) handler();
-                MettreAJourMiniCarte();
-                MettreAJourInspecteur();
             };
-            _toile.ZoomChange += delegate(double zoom) { _zoomLabel.Text = Math.Round(zoom * 100) + " %"; };
-            _toile.ModeChange += SyncModes;
-            _toile.Historique.Change += delegate { SyncHistory(); MettreAJourHistorique(); };
-            _toile.VueChangee += MettreAJourMiniCarte;
-            _toile.FormatCibleChange += MettreAJourInspecteur;
-            _toile.EtiquettesChange += MettreAJourFiltre;
-            _toile.DiapositiveChangee += delegate(int courante, int total)
+            _toile.ZoomChange += delegate(double zoom)
             {
-                if (_compteurTexte == null) return;
-                _compteurTexte.Text = courante == 0
-                    ? (total == 0 ? "Vue d'ensemble" : "Vue d'ensemble · " + total + " diapositive" + (total > 1 ? "s" : "") + " — → pour commencer")
-                    : courante + " / " + total;
+                Action<double> handler = ZoomChanged;
+                if (handler != null) handler(zoom * 100);
             };
-
-            _zoomLabel = new TextBlock { Text = "100 %", Foreground = Chrome.SoftText, VerticalAlignment = VerticalAlignment.Center, MinWidth = 44, TextAlignment = TextAlignment.Center };
-            BuildBar();
-            BuildPanels();
-            NoeudVisuel.ZoneFormatage = _barHost;
+            _toile.Historique.Change += SyncHistory;
             _root.AddHandler(InputElement.KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
             _root.AddHandler(InputElement.KeyUpEvent, delegate(object s, KeyEventArgs e) { if (e.Key == Key.Space) _toile.ModePanClavier(false); }, RoutingStrategies.Tunnel);
         }
 
+        private static Border Barre(Control contenu, IBrush fond)
+        {
+            return new Border
+            {
+                Background = fond,
+                BorderBrush = Chrome.Border,
+                BorderThickness = new Thickness(0, 0, 0, 1),
+                Child = contenu
+            };
+        }
+
         public Control View { get { return _root; } }
         public bool IsDirty { get { return _dirty; } }
+
+        public double Zoom { get { return _toile.Zoom * 100; } }
+
+        public void SetZoom(double percent)
+        {
+            _toile.DefinirZoom(Math.Max(0.2, Math.Min(4.0, percent / 100.0)));
+        }
 
         public void Load(string itemId, string title, byte[] tea)
         {
@@ -142,9 +145,11 @@ namespace MentalO.Marabook
                 _toile.ChargerDocument(document);
                 _toile.Historique.Vider();
                 _dirty = false;
-                SyncModes();
+                _barres.RemplirCombosCouleurs();
+                _barres.MettreAJourFormat();
+                _barres.MettreAJourModes();
                 SyncHistory();
-                MettreAJourPanneaux();
+                _panneaux.MettreAJourTout();
             }
             finally { _loading = false; }
             _toile.Focus();
@@ -162,183 +167,55 @@ namespace MentalO.Marabook
         public void ThemeChange()
         {
             _toile.AppliquerFondDocument();
-            MettreAJourMiniCarte();
+            _panneaux.MettreAJourMiniCarte();
         }
 
-        // ============================================================ la barre
-
-        private void BuildBar()
+        /// <summary>Les Paramètres (onglet Mental-O des Préférences) ont changé :
+        /// le Tust, les panneaux et les infobulles des gestes suivent.</summary>
+        public void RafraichirParametres()
         {
-            // — Boîtes.
-            Button newBox = Buttons.IconText("plus-bold", "Nouvelle boîte", "Une boîte au centre de la vue (ou double-clic sur le fond)", Buttons.Compact, Buttons.Look.Primary);
-            newBox.Click += delegate { _toile.CreerBoiteAuCentre(); };
-            Add(newBox);
-            Add(Action("arrow-right-bold", null, "Une boîte enfant, reliée par une flèche (Tab)", delegate { if (!_toile.CreerBoiteEnfant()) Hint(); }));
-            Add(Action("arrow-up-right-bold", null, "Une boîte sœur sous la sélection (Entrée)", delegate { if (!_toile.CreerBoiteSoeur()) Hint(); }));
-            Add(Action("pencil-simple-line", null, "Éditer le texte de la boîte (" + Geste("editer") + ")", delegate { _toile.EditerSelection(); }));
-            Add(Action("file-text-bold", null, "Note de la boîte (" + Geste("note") + ")", delegate { _toile.EditerNoteSelection(); }));
-            Add(Action("trash", null, "Supprimer la sélection (" + Geste("supprimer") + ")", delegate { _toile.SupprimerSelection(); }));
-            Rule();
+            _panneaux.MettreAJourTout();
+        }
 
-            // — Contenu.
-            Add(Action("image-square-bold", null, "Insérer une image dans la boîte… (" + Geste("inserer-image") + ")", delegate { _toile.InsererImageDansBoite(); }));
-            Add(Action("files-bold", null, "Lier un fichier à la boîte… (" + Geste("inserer-fichier") + ")", delegate { _toile.InsererFichierDansBoite(); }));
-            Add(Action("connection", null, "Insérer un lien web… (" + Geste("inserer-lien-web") + ")", delegate { _toile.InsererLienWeb(); }));
-            Rule();
+        // ============================================================ la barre d'actions
 
-            // — Texte.
-            Add(Action("text-b-bold", null, "Gras (" + Geste("gras") + ")", delegate { _toile.AppliquerFormatTexte("gras", null); }));
-            Add(Action("text-italic-bold", null, "Italique (" + Geste("italique") + ")", delegate { _toile.AppliquerFormatTexte("italique", null); }));
-            Add(Action("text-underline-bold", null, "Souligné (" + Geste("souligne") + ")", delegate { _toile.AppliquerFormatTexte("souligne", null); }));
-            Add(Action("text-strikethrough-bold", null, "Barré", delegate { _toile.AppliquerFormatTexte("barre", null); }));
-            Add(Menu("text-align-left-bold", null, "Alignement du texte", new MenuItem[]
-            {
-                Entry("Gauche", delegate { _toile.AppliquerFormatTexte("alignement", "gauche"); }),
-                Entry("Centré", delegate { _toile.AppliquerFormatTexte("alignement", "centre"); }),
-                Entry("Droite", delegate { _toile.AppliquerFormatTexte("alignement", "droite"); })
-            }));
-            Add(Menu("list-bullets", null, "Listes : puces, tirets, numéros, cases à cocher", new MenuItem[]
-            {
-                Entry("Puces", delegate { _toile.BasculerPuces("puce"); }),
-                Entry("Tirets", delegate { _toile.BasculerPuces("tiret"); }),
-                Entry("Numéros", delegate { _toile.BasculerPuces("numero"); }),
-                Entry("Cases à cocher", delegate { _toile.BasculerPuces("case"); })
-            }));
-            Add(Menu("palette", null, "Couleur et taille du texte", BuildTextMenu()));
-            Rule();
+        private Control ConstruireBarreActions()
+        {
+            DockPanel dock = new DockPanel { Margin = new Thickness(10, 5, 10, 5) };
 
-            // — Groupes et disposition.
-            Add(Action("folder-bold", null, "Grouper les boîtes sélectionnées (" + Geste("grouper") + ")", delegate { _toile.GrouperSelection(); }));
-            Add(Action("folder-open", null, "Dégrouper (" + Geste("degrouper") + ")", delegate { _toile.DegrouperSelection(); }));
-            Add(Action("caret-down-bold", null, "Plier / déplier le groupe (" + Geste("plier") + ")", delegate { _toile.BasculerPliageCible(); }));
-            Add(Menu("align-justify", "Aligner", "Aligner et distribuer la sélection", new MenuItem[]
-            {
-                Entry("Aligner à gauche", delegate { _toile.AlignerSelection("gauche"); }),
-                Entry("Centrer horizontalement", delegate { _toile.AlignerSelection("centre-h"); }),
-                Entry("Aligner à droite", delegate { _toile.AlignerSelection("droite"); }),
-                Entry("Aligner en haut", delegate { _toile.AlignerSelection("haut"); }),
-                Entry("Centrer verticalement", delegate { _toile.AlignerSelection("centre-v"); }),
-                Entry("Aligner en bas", delegate { _toile.AlignerSelection("bas"); }),
-                Entry("Distribuer horizontalement", delegate { _toile.DistribuerSelection(true); }),
-                Entry("Distribuer verticalement", delegate { _toile.DistribuerSelection(false); }),
-                Entry("Empiler", delegate { _toile.EmpilerSelection(); })
-            }));
-            Add(Menu("git-branch", "Ranger", "Ranger la carte en arbre", new MenuItem[]
-            {
-                Entry("Horizontal (racine à gauche)", delegate { _toile.RangerEnArbre("horizontal"); }),
-                Entry("Vertical (racine en haut)", delegate { _toile.RangerEnArbre("vertical"); }),
-                Entry("Radial (racine au centre)", delegate { _toile.RangerEnArbre("radial"); })
-            }));
-            Rule();
-
-            // — Modes.
-            Mode("automatique", "Auto", "Sélection et déplacement, liens par les poignées (" + Geste("mode-automatique") + ")");
-            Mode("deplacement", "Déplacer", "Ne fait que déplacer les boîtes (" + Geste("mode-deplacement") + ")");
-            Mode("liens", "Liens", "Tirer des liens d'une boîte à l'autre (" + Geste("mode-liens") + ")");
-            Mode("lecture", "Lecture", "Rien ne bouge : lire et naviguer (" + Geste("mode-lecture") + ")");
-            Rule();
-
-            // — Vue.
-            Add(Action("minus", null, "Zoom arrière (" + Geste("zoom-arriere") + ")", delegate { _toile.ZoomArriere(); }));
-            _bar.Children.Add(_zoomLabel);
-            Add(Action("plus-bold", null, "Zoom avant (" + Geste("zoom-avant") + ")", delegate { _toile.ZoomAvant(); }));
-            Add(Action("magnifying-glass-bold", null, "Tout voir (" + Geste("zoom-tout") + ")", delegate { _toile.ZoomToutVoir(); }));
-            Add(Action("file-magnifying-glass", null, "Rechercher dans la carte (" + Geste("rechercher") + ")", delegate { OuvrirRecherche(); }));
-            Add(Action("play-fill", "Présentation", "Diaporama de la carte, groupe par groupe (" + Geste("presentation") + ", Échap pour sortir)", delegate { BasculerPresentation(); }));
-            Add(Menu("grid", "Fenêtres", "Les panneaux flottants : mini-carte, inspecteur, historique, filtre, Tust", new MenuItem[]
-            {
-                Entry("Mini-carte", delegate { ParametresGlobaux.MiniCarteVisible = !ParametresGlobaux.MiniCarteVisible; ParametresGlobaux.Enregistrer(); MettreAJourPanneaux(); }),
-                Entry("Inspecteur de sélection", delegate { ParametresGlobaux.InspecteurVisible = !ParametresGlobaux.InspecteurVisible; ParametresGlobaux.Enregistrer(); MettreAJourPanneaux(); }),
-                Entry("Historique", delegate { ParametresGlobaux.HistoriqueVisible = !ParametresGlobaux.HistoriqueVisible; ParametresGlobaux.Enregistrer(); MettreAJourPanneaux(); }),
-                Entry("Filtre par étiquettes", delegate { ParametresGlobaux.FiltreVisible = !ParametresGlobaux.FiltreVisible; ParametresGlobaux.Enregistrer(); MettreAJourPanneaux(); }),
-                Entry("Tust des raccourcis", delegate { ParametresGlobaux.TustVisible = !ParametresGlobaux.TustVisible; ParametresGlobaux.Enregistrer(); MettreAJourPanneaux(); })
-            }));
-            Rule();
-
-            // — Thème, préférences de fichier, étiquettes, export, annulation.
-            List<MenuItem> themes = new List<MenuItem>();
-            foreach (ThemeCarte theme in ThemeCarte.Liste())
-            {
-                ThemeCarte themeRef = theme;
-                themes.Add(Entry(theme.Nom + (string.IsNullOrEmpty(theme.Description) ? "" : " — " + theme.Description), delegate { AppliquerTheme(themeRef); }));
-            }
-            Add(Menu("palette", "Thème", "Thème de carte : fond, boîtes et liens d'un coup", themes.ToArray()));
-            Add(Menu("gear-six-bold", null, "Préférences de la carte, étiquettes, versions antérieures", new MenuItem[]
-            {
-                Entry("Préférences de la carte…", delegate { OuvrirPreferencesFichier(); }),
-                Entry("Étiquettes de la carte…", delegate { DialogueEtiquettes.Ouvrir(_host.MainWindow, _toile); }),
-                Entry("Versions antérieures…", delegate { OuvrirVersions(); }),
-                Entry("Importer un texte à puces…", delegate { ImporterTexteAPuces(); })
-            }));
-            Add(Menu("file-arrow-down-bold", "Exporter", "La carte en image, dessin, texte ou canevas", new MenuItem[]
-            {
-                Entry("Image PNG…", delegate { Exporter("png", "Image PNG"); }),
-                Entry("Document PDF…", delegate { Exporter("pdf", "Document PDF"); }),
-                Entry("Dessin SVG…", delegate { Exporter("svg", "Dessin SVG"); }),
-                Entry("Texte Markdown…", delegate { Exporter("md", "Texte Markdown"); }),
-                Entry("Plan OPML…", delegate { Exporter("opml", "Plan OPML"); }),
-                Entry("JSON Canvas (Obsidian)…", delegate { Exporter("canvas", "Canevas JSON Canvas"); }),
-                Entry("Carte Mental-O (.tea)…", delegate { Exporter("tea", "Carte Mental-O"); })
-            }));
-            _undo = Action("arrow-counter-clockwise", null, "Annuler (" + Geste("annuler") + ")", delegate { _toile.Historique.Annuler(); });
-            Add(_undo);
-            _redo = Action("arrow-counter-clockwise", null, "Rétablir (" + Geste("retablir") + ")", delegate { _toile.Historique.Refaire(); });
+            // À droite : annuler / rétablir.
+            StackPanel droite = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
+            _undo = Bouton("arrow-counter-clockwise", null, "Annuler (" + Geste("annuler") + ")", Buttons.Look.Calm, delegate { _toile.Historique.Annuler(); });
+            droite.Children.Add(_undo);
+            _redo = Bouton("arrow-counter-clockwise", null, "Rétablir (" + Geste("retablir") + ")", Buttons.Look.Calm, delegate { _toile.Historique.Refaire(); });
             Control redoIcon = _redo.Content as Control;
             if (redoIcon != null) redoIcon.RenderTransform = new ScaleTransform(-1, 1);
-            Add(_redo);
-        }
+            droite.Children.Add(_redo);
+            DockPanel.SetDock(droite, Dock.Right);
+            dock.Children.Add(droite);
 
-        private MenuItem[] BuildTextMenu()
-        {
-            List<MenuItem> items = new List<MenuItem>();
-            MenuItem couleur = Ui.SousMenu("Couleur du texte");
-            for (int i = 0; i < Palette.Couleurs.GetLength(0); i++)
-            {
-                string hexa = Palette.Couleurs[i, 1];
-                MenuItem e = Entry(Palette.Couleurs[i, 0], delegate { _toile.AppliquerFormatTexte("couleur", hexa); });
-                e.Icon = Ui.Pastille(hexa, 14);
-                couleur.Items.Add(e);
-            }
-            couleur.Items.Add(Ui.Separateur());
-            couleur.Items.Add(Entry("Personnalisée…", delegate { _toile.ChoisirCouleurPersonnalisee("couleur"); }));
-            items.Add(couleur);
-            MenuItem surlignage = Ui.SousMenu("Surlignage");
-            surlignage.Items.Add(Entry("Aucun", delegate { _toile.AppliquerFormatTexte("surlignage", null); }));
-            for (int i = 0; i < Palette.Surlignages.GetLength(0); i++)
-            {
-                string hexa = Palette.Surlignages[i, 1];
-                MenuItem e = Entry(Palette.Surlignages[i, 0], delegate { _toile.AppliquerFormatTexte("surlignage", hexa); });
-                e.Icon = Ui.Pastille(hexa, 14);
-                surlignage.Items.Add(e);
-            }
-            items.Add(surlignage);
-            MenuItem taille = Ui.SousMenu("Taille");
-            foreach (double valeur in Palette.Tailles)
-            {
-                double capture = valeur;
-                taille.Items.Add(Entry(valeur.ToString(), delegate { _toile.AppliquerFormatTexte("taille", capture); }));
-            }
-            taille.Items.Add(Ui.Separateur());
-            taille.Items.Add(Entry("Autre…", delegate { _toile.DemanderTaillePersonnalisee(); }));
-            items.Add(taille);
-            MenuItem police = Ui.SousMenu("Police");
-            bool construit = false;
-            police.Items.Add(Entry("…", null));
-            police.SubmenuOpened += delegate
-            {
-                if (construit) return;
-                construit = true;
-                police.Items.Clear();
-                foreach (string nom in TexteRiche.PolicesSysteme())
-                {
-                    string capture = nom;
-                    MenuItem e = Entry(nom, delegate { _toile.AppliquerFormatTexte("police", capture); });
-                    e.FontFamily = TexteRiche.Police(nom);
-                    police.Items.Add(e);
-                }
-            };
-            items.Add(police);
-            return items.ToArray();
+            WrapPanel bar = new WrapPanel { Orientation = Orientation.Horizontal };
+            bar.Children.Add(Bouton("plus-bold", "Nouvelle boîte", "Une boîte au centre de la vue (ou double-clic sur le fond)", Buttons.Look.Primary, delegate { _toile.CreerBoiteAuCentre(); }));
+            bar.Children.Add(Bouton("arrow-right-bold", null, "Une boîte enfant, reliée par une flèche (Tab)", Buttons.Look.Calm, delegate { if (!_toile.CreerBoiteEnfant()) Hint(); }));
+            bar.Children.Add(Bouton("arrow-up-right-bold", null, "Une boîte sœur sous la sélection (Entrée)", Buttons.Look.Calm, delegate { if (!_toile.CreerBoiteSoeur()) Hint(); }));
+            bar.Children.Add(_habillage.Separateur());
+
+            bar.Children.Add(BoutonMenu("pencil-simple-line", "Édition", "Annuler, copier, dupliquer, rechercher, note, étiquettes, supprimer, grouper, plier", MenuEdition));
+            bar.Children.Add(BoutonMenu("image-square-bold", "Insertion", "Image, fichier, lien web, texte à puces", MenuInsertion));
+            bar.Children.Add(BoutonMenu("align-justify", "Disposition", "Aligner et distribuer, empiler, ranger en arbre", MenuDisposition));
+            bar.Children.Add(BoutonMenu("magnifying-glass-bold", "Affichage", "Zoom, recentrer, tout voir, mettre en avant, présentation", MenuAffichage));
+            bar.Children.Add(BoutonMenu("grid", "Fenêtres", "Les panneaux flottants : Tust, mini-carte, inspecteur, historique, filtre", MenuFenetres));
+            bar.Children.Add(_habillage.Separateur());
+
+            bar.Children.Add(BoutonMenu("palette", "Thème", "Thème de carte : fond, boîtes et liens d'un coup", MenuThemes));
+            bar.Children.Add(BoutonMenu("gear-six-bold", "Carte", "Préférences de la carte, étiquettes, versions antérieures", MenuCarte));
+            bar.Children.Add(BoutonMenu("file-arrow-down-bold", "Exporter", "La carte en image, PDF, dessin, texte, plan ou canevas", MenuExporter));
+            bar.Children.Add(_habillage.Separateur());
+
+            bar.Children.Add(Bouton("file-magnifying-glass", null, "Rechercher dans la carte (" + Geste("rechercher") + ")", Buttons.Look.Calm, delegate { _panneaux.OuvrirRecherche(); }));
+            bar.Children.Add(Bouton("play-fill", "Présentation", "Diaporama de la carte, groupe par groupe (" + Geste("presentation") + ", Échap pour sortir)", Buttons.Look.Outline, delegate { BasculerPresentation(); }));
+            dock.Children.Add(bar);
+            return dock;
         }
 
         private static string Geste(string id)
@@ -347,61 +224,187 @@ namespace MentalO.Marabook
             return geste.Length == 0 ? "sans raccourci" : geste;
         }
 
-        private void Add(Control element)
-        {
-            element.Margin = new Thickness(0, 0, 4, 2);
-            _bar.Children.Add(element);
-        }
-
-        private void Rule()
-        {
-            _bar.Children.Add(new Border { Width = 1, Height = 22, Background = Chrome.Border, Margin = new Thickness(4, 0, 8, 2), VerticalAlignment = VerticalAlignment.Center });
-        }
-
-        private Button Action(string icon, string label, string tooltip, Action onClick)
+        private Button Bouton(string icon, string label, string tooltip, Buttons.Look look, Action onClick)
         {
             Button button = label == null
-                ? Buttons.Icon(icon, tooltip, Buttons.Compact, Buttons.Look.Calm)
-                : Buttons.IconText(icon, label, tooltip, Buttons.Compact, Buttons.Look.Outline);
-            button.Focusable = false;
+                ? Buttons.Icon(icon, tooltip, Buttons.Compact, look)
+                : Buttons.IconText(icon, label, tooltip, Buttons.Compact, look);
+            button.Margin = new Thickness(0, 0, 4, 2);
             button.Click += delegate { onClick(); _toile.Focus(); };
             return button;
         }
 
-        private Button Menu(string icon, string label, string tooltip, MenuItem[] entries)
+        /// <summary>Un bouton qui déroule un menu reconstruit à chaque ouverture (les coches suivent l'état).</summary>
+        private Button BoutonMenu(string icon, string label, string tooltip, Func<List<Control>> contenu)
         {
-            Button button = label == null
-                ? Buttons.Icon(icon, tooltip, Buttons.Compact, Buttons.Look.Calm)
-                : Buttons.IconText(icon, label, tooltip, Buttons.Compact, Buttons.Look.Outline);
-            button.Focusable = false;
-            ContextMenu menu = new ContextMenu { Placement = PlacementMode.Bottom };
-            foreach (MenuItem entry in entries) menu.Items.Add(entry);
-            menu.Opened += delegate { NoeudVisuel.ProtectionFocus = true; };
-            menu.Closed += delegate { NoeudVisuel.ProtectionFocus = false; };
-            button.Click += delegate { menu.Open(button); };
+            Button button = Buttons.IconText(icon, label + " ▾", tooltip, Buttons.Compact, Buttons.Look.Calm);
+            button.Margin = new Thickness(0, 0, 4, 2);
+            button.Click += delegate
+            {
+                ContextMenu menu = new ContextMenu { Placement = PlacementMode.BottomEdgeAlignedLeft };
+                foreach (Control element in contenu()) menu.Items.Add(element);
+                menu.Opened += delegate { NoeudVisuel.ProtectionFocus = true; };
+                menu.Closed += delegate { NoeudVisuel.ProtectionFocus = false; _toile.Focus(); };
+                menu.Open(button);
+            };
             return button;
         }
 
-        private MenuItem Entry(string header, Action onClick)
+        private MenuItem Entree(string entete, string idAction, Action clic)
         {
-            MenuItem item = new MenuItem { Header = header };
-            if (onClick != null) item.Click += delegate { onClick(); _toile.Focus(); };
-            return item;
+            string geste = idAction == null ? null : ParametresGlobaux.GesteAffiche(idAction);
+            return Ui.Element(entete, clic, false, string.IsNullOrEmpty(geste) ? null : geste);
         }
 
-        private void Mode(string mode, string label, string tooltip)
+        private MenuItem Entree(string entete, Action clic)
         {
-            ToggleButton toggle = Buttons.TextToggle(label, tooltip, Buttons.Compact);
-            toggle.Tag = mode;
-            toggle.Focusable = false;
-            toggle.Click += delegate { _toile.DefinirMode(mode); SyncModes(); _toile.Focus(); };
-            _modes.Add(toggle);
-            Add(toggle);
+            return Ui.Element(entete, clic);
         }
 
-        private void SyncModes()
+        private MenuItem Coche(string entete, bool coche, Action clic)
         {
-            foreach (ToggleButton toggle in _modes) toggle.IsChecked = (string)toggle.Tag == _toile.Mode;
+            return Ui.Element(entete, clic, coche);
+        }
+
+        private List<Control> MenuEdition()
+        {
+            List<Control> items = new List<Control>();
+            MenuItem annuler = Entree("Annuler", "annuler", delegate { _toile.Historique.Annuler(); });
+            annuler.IsEnabled = _toile.Historique.PeutAnnuler;
+            items.Add(annuler);
+            MenuItem retablir = Entree("Rétablir", "retablir", delegate { _toile.Historique.Refaire(); });
+            retablir.IsEnabled = _toile.Historique.PeutRefaire;
+            items.Add(retablir);
+            items.Add(Ui.Separateur());
+            items.Add(Entree("Copier les boîtes", "copier", delegate { _toile.CopierSelection(); }));
+            items.Add(Entree("Coller", "coller", delegate { Coller(); }));
+            items.Add(Entree("Dupliquer", "dupliquer", delegate { _toile.DupliquerSelection(); }));
+            items.Add(Ui.Separateur());
+            items.Add(Entree("Rechercher…", "rechercher", delegate { _panneaux.OuvrirRecherche(); }));
+            items.Add(Entree("Tout sélectionner", "tout-selectionner", delegate { _toile.SelectionnerTout(); }));
+            items.Add(Ui.Separateur());
+            items.Add(Entree("Modifier la boîte sélectionnée", "editer", delegate { _toile.EditerSelection(); }));
+            items.Add(Entree("Note de la boîte…", "note", delegate { _toile.EditerNoteSelection(); }));
+            items.Add(Entree("Étiquettes de la carte…", delegate { DialogueEtiquettes.Ouvrir(_host.MainWindow, _toile); }));
+            items.Add(Ui.Separateur());
+            items.Add(Entree("Supprimer la sélection", "supprimer", delegate { _toile.SupprimerSelection(); }));
+            items.Add(Ui.Separateur());
+            items.Add(Entree("Grouper", "grouper", delegate { _toile.GrouperSelection(); }));
+            items.Add(Entree("Dégrouper", "degrouper", delegate { _toile.DegrouperSelection(); }));
+            items.Add(Entree("Plier / déplier le groupe", "plier", delegate { _toile.BasculerPliageCible(); }));
+            return items;
+        }
+
+        private List<Control> MenuInsertion()
+        {
+            List<Control> items = new List<Control>();
+            items.Add(Entree("Image…", "inserer-image", delegate { _toile.InsererImageDansBoite(); }));
+            items.Add(Entree("Fichier…", "inserer-fichier", delegate { _toile.InsererFichierDansBoite(); }));
+            items.Add(Entree("Lien web…", "inserer-lien-web", delegate { _toile.InsererLienWeb(); }));
+            items.Add(Ui.Separateur());
+            items.Add(Entree("Importer un texte à puces…", delegate { ImporterTexteAPuces(); }));
+            return items;
+        }
+
+        private List<Control> MenuDisposition()
+        {
+            List<Control> items = new List<Control>();
+            MenuItem aligner = Ui.SousMenu("Aligner et distribuer");
+            aligner.Items.Add(Entree("Aligner à gauche", delegate { _toile.AlignerSelection("gauche"); }));
+            aligner.Items.Add(Entree("Centrer horizontalement", delegate { _toile.AlignerSelection("centre-h"); }));
+            aligner.Items.Add(Entree("Aligner à droite", delegate { _toile.AlignerSelection("droite"); }));
+            aligner.Items.Add(Ui.Separateur());
+            aligner.Items.Add(Entree("Aligner en haut", delegate { _toile.AlignerSelection("haut"); }));
+            aligner.Items.Add(Entree("Centrer verticalement", delegate { _toile.AlignerSelection("centre-v"); }));
+            aligner.Items.Add(Entree("Aligner en bas", delegate { _toile.AlignerSelection("bas"); }));
+            aligner.Items.Add(Ui.Separateur());
+            aligner.Items.Add(Entree("Distribuer horizontalement", delegate { _toile.DistribuerSelection(true); }));
+            aligner.Items.Add(Entree("Distribuer verticalement", delegate { _toile.DistribuerSelection(false); }));
+            items.Add(aligner);
+            items.Add(Entree("Empiler la sélection", "empiler", delegate { _toile.EmpilerSelection(); }));
+            MenuItem ranger = Ui.SousMenu("Ranger en arbre");
+            ranger.Items.Add(Entree("Horizontal (racine à gauche)", delegate { _toile.RangerEnArbre("horizontal"); }));
+            ranger.Items.Add(Entree("Vertical (racine en haut)", delegate { _toile.RangerEnArbre("vertical"); }));
+            ranger.Items.Add(Entree("Radial (racine au centre)", delegate { _toile.RangerEnArbre("radial"); }));
+            items.Add(ranger);
+            return items;
+        }
+
+        private List<Control> MenuAffichage()
+        {
+            List<Control> items = new List<Control>();
+            items.Add(Entree("Zoom avant", "zoom-avant", delegate { _toile.ZoomAvant(); }));
+            items.Add(Entree("Zoom arrière", "zoom-arriere", delegate { _toile.ZoomArriere(); }));
+            items.Add(Entree("Zoom 100 %", "zoom-100", delegate { _toile.ZoomReinitialiser(); }));
+            items.Add(Ui.Separateur());
+            items.Add(Entree("Recentrer la carte", "recentrer", delegate { _toile.Recentrer(); }));
+            items.Add(Entree("Tout voir", "zoom-tout", delegate { _toile.ZoomToutVoir(); }));
+            items.Add(Entree("Zoom sur la sélection", "zoom-selection", delegate { _toile.ZoomSurSelection(); }));
+            items.Add(Ui.Separateur());
+            items.Add(Coche("Mettre en avant la sélection", _toile.FocusActif, delegate { _toile.BasculerFocusSelection(); }));
+            items.Add(Ui.Separateur());
+            items.Add(Coche("Mode présentation", _presenting, delegate { BasculerPresentation(); }));
+            return items;
+        }
+
+        private List<Control> MenuFenetres()
+        {
+            List<Control> items = new List<Control>();
+            items.Add(Coche("Tust des raccourcis", ParametresGlobaux.TustVisible, delegate { ParametresGlobaux.TustVisible = !ParametresGlobaux.TustVisible; PanneauxChanges(); }));
+            items.Add(Coche("Mini-carte", ParametresGlobaux.MiniCarteVisible, delegate { ParametresGlobaux.MiniCarteVisible = !ParametresGlobaux.MiniCarteVisible; PanneauxChanges(); }));
+            items.Add(Coche("Inspecteur de sélection", ParametresGlobaux.InspecteurVisible, delegate { ParametresGlobaux.InspecteurVisible = !ParametresGlobaux.InspecteurVisible; PanneauxChanges(); }));
+            items.Add(Coche("Historique", ParametresGlobaux.HistoriqueVisible, delegate { ParametresGlobaux.HistoriqueVisible = !ParametresGlobaux.HistoriqueVisible; PanneauxChanges(); }));
+            items.Add(Coche("Filtre par étiquettes", ParametresGlobaux.FiltreVisible, delegate { ParametresGlobaux.FiltreVisible = !ParametresGlobaux.FiltreVisible; PanneauxChanges(); }));
+            return items;
+        }
+
+        private void PanneauxChanges()
+        {
+            ParametresGlobaux.Enregistrer();
+            _panneaux.MettreAJourTout();
+        }
+
+        private List<Control> MenuThemes()
+        {
+            List<Control> items = new List<Control>();
+            foreach (ThemeCarte theme in ThemeCarte.Liste())
+            {
+                ThemeCarte choix = theme;
+                MenuItem element = Entree(theme.Nom, delegate { AppliquerTheme(choix); });
+                Ui.Infobulle(element, theme.Description);
+                element.Icon = new Border
+                {
+                    Width = 14, Height = 14, CornerRadius = new CornerRadius(3),
+                    Background = new SolidColorBrush(Palette.CouleurDepuis(theme.FondCouleur, Colors.White)),
+                    BorderBrush = new SolidColorBrush(Palette.CouleurDepuis(theme.Boite.BordureCouleur, Colors.Gray)),
+                    BorderThickness = new Thickness(1.5)
+                };
+                items.Add(element);
+            }
+            return items;
+        }
+
+        private List<Control> MenuCarte()
+        {
+            List<Control> items = new List<Control>();
+            items.Add(Entree("Préférences de la carte…", delegate { OuvrirPreferencesFichier(); }));
+            items.Add(Entree("Étiquettes de la carte…", delegate { DialogueEtiquettes.Ouvrir(_host.MainWindow, _toile); }));
+            items.Add(Entree("Versions antérieures…", delegate { OuvrirVersions(); }));
+            return items;
+        }
+
+        private List<Control> MenuExporter()
+        {
+            List<Control> items = new List<Control>();
+            items.Add(Entree("Image PNG…", delegate { Exporter("png", "Image PNG"); }));
+            items.Add(Entree("Document PDF…", delegate { Exporter("pdf", "Document PDF"); }));
+            items.Add(Entree("Dessin SVG…", delegate { Exporter("svg", "Dessin SVG"); }));
+            items.Add(Entree("Texte Markdown…", delegate { Exporter("md", "Texte Markdown"); }));
+            items.Add(Entree("Plan OPML…", delegate { Exporter("opml", "Plan OPML"); }));
+            items.Add(Entree("JSON Canvas (Obsidian)…", delegate { Exporter("canvas", "Canevas JSON Canvas"); }));
+            items.Add(Ui.Separateur());
+            items.Add(Entree("Carte Mental-O (.tea)…", delegate { Exporter("tea", "Carte Mental-O"); }));
+            return items;
         }
 
         private void SyncHistory()
@@ -415,216 +418,6 @@ namespace MentalO.Marabook
             _host.Message("Sélectionnez d'abord une boîte : la nouvelle se place par rapport à elle.", "Cartes mentales", MessageButtons.OK, MessageIcon.Information);
         }
 
-        // ============================================================ panneaux flottants
-
-        private Border Panneau(HorizontalAlignment h, VerticalAlignment v, Control contenu)
-        {
-            return new Border
-            {
-                HorizontalAlignment = h,
-                VerticalAlignment = v,
-                Margin = new Thickness(12, 10, 12, 10),
-                Background = Chrome.RaisedBg,
-                BorderBrush = Chrome.Border,
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(6),
-                Padding = new Thickness(10, 7, 10, 8),
-                IsVisible = false,
-                Child = contenu
-            };
-        }
-
-        private static TextBlock Titre(string texte)
-        {
-            return new TextBlock { Text = texte, FontWeight = FontWeight.Bold, FontSize = 12, Foreground = Chrome.Ink, Margin = new Thickness(0, 0, 0, 4) };
-        }
-
-        private void BuildPanels()
-        {
-            StackPanel mini = new StackPanel();
-            mini.Children.Add(Titre("Mini-carte"));
-            _miniCanvas = new Canvas { Width = 166, Height = 106, Background = Chrome.CardBg, ClipToBounds = true };
-            _miniCanvas.PointerPressed += delegate(object s, PointerPressedEventArgs e)
-            {
-                Point p = e.GetPosition(_miniCanvas);
-                _toile.CentrerSur(new Point(_miniOrigine.X + p.X / _miniEchelle, _miniOrigine.Y + p.Y / _miniEchelle));
-            };
-            mini.Children.Add(_miniCanvas);
-            _miniCarte = Panneau(HorizontalAlignment.Left, VerticalAlignment.Bottom, mini);
-            _centre.Children.Add(_miniCarte);
-
-            StackPanel insp = new StackPanel();
-            insp.Children.Add(Titre("Inspecteur"));
-            _inspecteurTexte = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, MaxWidth = 220, Foreground = Chrome.SoftText };
-            insp.Children.Add(_inspecteurTexte);
-            _inspecteur = Panneau(HorizontalAlignment.Right, VerticalAlignment.Bottom, insp);
-            _centre.Children.Add(_inspecteur);
-
-            StackPanel histo = new StackPanel();
-            histo.Children.Add(Titre("Historique"));
-            _historiqueTexte = new TextBlock { FontSize = 12, Foreground = Chrome.SoftText };
-            histo.Children.Add(_historiqueTexte);
-            _historique = Panneau(HorizontalAlignment.Left, VerticalAlignment.Top, histo);
-            _centre.Children.Add(_historique);
-
-            _filtreContenu = new StackPanel { MinWidth = 170 };
-            _filtre = Panneau(HorizontalAlignment.Left, VerticalAlignment.Top, _filtreContenu);
-            _centre.Children.Add(_filtre);
-
-            _tustContenu = new StackPanel();
-            _tust = Panneau(HorizontalAlignment.Right, VerticalAlignment.Top, _tustContenu);
-            _tust.MaxWidth = 290;
-            _centre.Children.Add(_tust);
-
-            _compteurTexte = new TextBlock { Foreground = Chrome.SoftText, FontSize = 12 };
-            _compteur = Panneau(HorizontalAlignment.Right, VerticalAlignment.Bottom, _compteurTexte);
-            _compteur.Padding = new Thickness(10, 4, 10, 4);
-            ToolTip.SetTip(_compteur, "→ / Espace : diapositive suivante · ← : précédente · Début : vue d'ensemble · Échap : quitter");
-            _centre.Children.Add(_compteur);
-
-            // La recherche, en haut au centre.
-            StackPanel rech = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
-            _champRecherche = new TextBox { Width = 200, VerticalAlignment = VerticalAlignment.Center };
-            _champRecherche.PropertyChanged += delegate(object s, AvaloniaPropertyChangedEventArgs e)
-            {
-                if (e.Property == TextBox.TextProperty) ActualiserRecherche(true);
-            };
-            _champRecherche.AddHandler(InputElement.KeyDownEvent, delegate(object s, KeyEventArgs e)
-            {
-                if (e.Key == Key.Enter) { NaviguerRecherche((e.KeyModifiers & KeyModifiers.Shift) != 0 ? -1 : 1); e.Handled = true; }
-                else if (e.Key == Key.Escape) { FermerRecherche(); e.Handled = true; }
-            }, RoutingStrategies.Tunnel);
-            rech.Children.Add(_champRecherche);
-            _compteurRecherche = new TextBlock { VerticalAlignment = VerticalAlignment.Center, MinWidth = 32, TextAlignment = TextAlignment.Center, Foreground = Chrome.SoftText };
-            rech.Children.Add(_compteurRecherche);
-            Button prec = Buttons.Icon("caret-left-bold", "Occurrence précédente (Maj+Entrée)", Buttons.Compact, Buttons.Look.Calm);
-            prec.Click += delegate { NaviguerRecherche(-1); };
-            rech.Children.Add(prec);
-            Button suiv = Buttons.Icon("caret-right-bold", "Occurrence suivante (Entrée)", Buttons.Compact, Buttons.Look.Calm);
-            suiv.Click += delegate { NaviguerRecherche(1); };
-            rech.Children.Add(suiv);
-            Button fermer = Buttons.Text("✕", "Fermer (Échap)", Buttons.Compact, Buttons.Look.Calm);
-            fermer.Click += delegate { FermerRecherche(); };
-            rech.Children.Add(fermer);
-            _recherche = Panneau(HorizontalAlignment.Center, VerticalAlignment.Top, rech);
-            _centre.Children.Add(_recherche);
-        }
-
-        private void MettreAJourPanneaux()
-        {
-            _miniCarte.IsVisible = ParametresGlobaux.MiniCarteVisible;
-            _inspecteur.IsVisible = ParametresGlobaux.InspecteurVisible;
-            _historique.IsVisible = ParametresGlobaux.HistoriqueVisible;
-            _filtre.IsVisible = ParametresGlobaux.FiltreVisible;
-            _tust.IsVisible = ParametresGlobaux.TustVisible;
-            if (!ParametresGlobaux.FiltreVisible && _toile.FiltreActif) _toile.DefinirFiltreEtiquettes(null, false);
-            MettreAJourMiniCarte();
-            MettreAJourInspecteur();
-            MettreAJourHistorique();
-            MettreAJourFiltre();
-            MettreAJourTust();
-        }
-
-        private void MettreAJourMiniCarte()
-        {
-            if (_miniCanvas == null || !_miniCarte.IsVisible) return;
-            _miniCanvas.Children.Clear();
-            double zoom = _toile.Zoom;
-            if (zoom <= 0 || _toile.Bounds.Width <= 0) return;
-            Point origine = _toile.OrigineVue;
-            Rect vue = new Rect(-origine.X / zoom, -origine.Y / zoom, _toile.Bounds.Width / zoom, _toile.Bounds.Height / zoom);
-            Rect monde = vue;
-            List<Rect> rectangles = _toile.RectanglesNoeuds();
-            foreach (Rect r in rectangles) monde = monde.Union(r);
-            if (monde.Width < 1 || monde.Height < 1) return;
-            _miniEchelle = Math.Min(_miniCanvas.Width / monde.Width, _miniCanvas.Height / monde.Height);
-            _miniOrigine = monde.TopLeft;
-            foreach (Rect r in rectangles)
-            {
-                Avalonia.Controls.Shapes.Rectangle forme = new Avalonia.Controls.Shapes.Rectangle
-                {
-                    Width = Math.Max(2, r.Width * _miniEchelle),
-                    Height = Math.Max(2, r.Height * _miniEchelle),
-                    Fill = Chrome.FaintText,
-                    RadiusX = 1,
-                    RadiusY = 1
-                };
-                Canvas.SetLeft(forme, (r.X - monde.X) * _miniEchelle);
-                Canvas.SetTop(forme, (r.Y - monde.Y) * _miniEchelle);
-                _miniCanvas.Children.Add(forme);
-            }
-            Avalonia.Controls.Shapes.Rectangle cadre = new Avalonia.Controls.Shapes.Rectangle
-            {
-                Width = Math.Max(4, vue.Width * _miniEchelle),
-                Height = Math.Max(4, vue.Height * _miniEchelle),
-                Stroke = Chrome.Accent,
-                StrokeThickness = 1,
-                Fill = Chrome.AccentTint,
-                Opacity = 0.8
-            };
-            Canvas.SetLeft(cadre, (vue.X - monde.X) * _miniEchelle);
-            Canvas.SetTop(cadre, (vue.Y - monde.Y) * _miniEchelle);
-            _miniCanvas.Children.Add(cadre);
-        }
-
-        private void MettreAJourInspecteur()
-        {
-            if (_inspecteurTexte == null || !_inspecteur.IsVisible) return;
-            _inspecteurTexte.Text = PanneauxToile.TexteInspecteur(_toile);
-        }
-
-        private void MettreAJourHistorique()
-        {
-            if (_historiqueTexte == null || !_historique.IsVisible) return;
-            _historiqueTexte.Text = string.Format("{0} action(s) annulable(s)\n{1} action(s) rétablissable(s)",
-                _toile.Historique.NbAnnulables, _toile.Historique.NbRefaisables);
-        }
-
-        private void MettreAJourFiltre()
-        {
-            if (_filtreContenu == null || !_filtre.IsVisible) return;
-            PanneauxToile.RemplirPanneauFiltre(_filtreContenu, _toile, _host.MainWindow);
-        }
-
-        private void MettreAJourTust()
-        {
-            if (_tustContenu == null || !_tust.IsVisible) return;
-            PanneauxToile.RemplirTust(_tustContenu);
-        }
-
-        // ============================================================ recherche
-
-        private void OuvrirRecherche()
-        {
-            _recherche.IsVisible = true;
-            _champRecherche.Focus();
-            _champRecherche.SelectAll();
-            ActualiserRecherche(false);
-        }
-
-        private void FermerRecherche()
-        {
-            _recherche.IsVisible = false;
-            _toile.Focus();
-        }
-
-        private void ActualiserRecherche(bool aller)
-        {
-            string texte = _champRecherche.Text ?? "";
-            _resultats = _toile.Rechercher(texte);
-            _indiceResultat = 0;
-            _compteurRecherche.Text = _resultats.Count == 0 ? (texte.Trim().Length == 0 ? "" : "0") : "1/" + _resultats.Count;
-            if (aller && _resultats.Count > 0) _toile.AllerAuNoeud(_resultats[0]);
-        }
-
-        private void NaviguerRecherche(int sens)
-        {
-            if (_resultats.Count == 0) return;
-            _indiceResultat = (_indiceResultat + sens + _resultats.Count) % _resultats.Count;
-            _compteurRecherche.Text = (_indiceResultat + 1) + "/" + _resultats.Count;
-            _toile.AllerAuNoeud(_resultats[_indiceResultat]);
-        }
-
         // ============================================================ présentation, thèmes, dialogues, exports
 
         private void BasculerPresentation()
@@ -633,9 +426,10 @@ namespace MentalO.Marabook
             _presenting = true;
             _modeAvantPresentation = _toile.Mode;
             _toile.DefinirMode("lecture");
-            _barHost.IsVisible = false;
-            _compteur.IsVisible = true;
-            SyncModes();
+            _barreActions.IsVisible = false;
+            _barreModes.IsVisible = false;
+            _barreFormat.IsVisible = false;
+            _panneaux.CompteurPresentation.IsVisible = true;
             _toile.Focus();
             Dispatcher.UIThread.Post(delegate { _toile.PresentationDebut(); }, DispatcherPriority.Loaded);
         }
@@ -644,10 +438,12 @@ namespace MentalO.Marabook
         {
             if (!_presenting) return;
             _presenting = false;
-            _barHost.IsVisible = true;
-            _compteur.IsVisible = false;
+            _barreActions.IsVisible = true;
+            _barreModes.IsVisible = true;
+            _barreFormat.IsVisible = true;
+            _panneaux.CompteurPresentation.IsVisible = false;
             _toile.DefinirMode(string.IsNullOrEmpty(_modeAvantPresentation) ? "automatique" : _modeAvantPresentation);
-            SyncModes();
+            _barres.MettreAJourModes();
         }
 
         private async void AppliquerTheme(ThemeCarte theme)
@@ -667,7 +463,11 @@ namespace MentalO.Marabook
         private async void OuvrirPreferencesFichier()
         {
             if (await DialoguePreferencesFichier.Afficher(_host.MainWindow, _toile.Document, _toile.RectanglesNoeuds()))
+            {
                 _toile.AppliquerPreferencesDocument(true);
+                _barres.RemplirCombosCouleurs();
+                _barres.MettreAJourFormat();
+            }
         }
 
         private async void OuvrirVersions()
@@ -746,13 +546,12 @@ namespace MentalO.Marabook
             "annuler", "retablir", "copier", "coller", "tout-selectionner", "supprimer", "editer", "dupliquer"
         };
 
-        /// <summary>Les raccourcis de la toile (ceux de Fichier > Paramètres de
-        /// Mental-O), quand la toile a le clavier et qu'aucune boîte n'est en cours
-        /// d'édition. Les actions de fichier (nouveau, ouvrir, enregistrer) et de
-        /// fenêtre (plein écran) restent à Marabook.</summary>
+        /// <summary>Les raccourcis de la toile (ceux de Préférences > Mental-O (dlc)),
+        /// quand la toile ou un de ses panneaux a le clavier. Les actions de fichier
+        /// (nouveau, ouvrir, enregistrer) et de fenêtre (plein écran) restent à Marabook.</summary>
         private void OnKeyDown(object sender, KeyEventArgs e)
         {
-            if (!_toile.IsKeyboardFocusWithin && !_champRecherche.IsFocused) return;
+            if (!_root.IsKeyboardFocusWithin) return;
             bool editing = Ui.Ancetre<TextBox>(e.Source, _root) != null;
             if (_presenting)
             {
@@ -761,7 +560,7 @@ namespace MentalO.Marabook
                 if (e.Key == Key.Left || e.Key == Key.Up || e.Key == Key.PageUp || e.Key == Key.Back) { _toile.PresentationPrecedente(); e.Handled = true; return; }
                 if (e.Key == Key.Home) { _toile.PresentationDebut(); e.Handled = true; return; }
             }
-            if (!editing && e.KeyModifiers == KeyModifiers.None)
+            if (!editing && e.KeyModifiers == KeyModifiers.None && _toile.IsKeyboardFocusWithin)
             {
                 if (e.Key == Key.Tab) { if (_toile.CreerBoiteEnfant()) { e.Handled = true; return; } }
                 else if (e.Key == Key.Enter) { if (_toile.CreerBoiteSoeur()) { e.Handled = true; return; } }
@@ -783,12 +582,12 @@ namespace MentalO.Marabook
             if (e.Key == Key.Escape)
             {
                 if (_toile.FocusActif) _toile.AnnulerFocus();
-                else if (_recherche.IsVisible) FermerRecherche();
+                else if (_panneaux.RechercheVisible) _panneaux.FermerRecherche();
                 else _toile.Deselectionner();
                 e.Handled = true;
                 return;
             }
-            if (e.KeyModifiers == KeyModifiers.None)
+            if (e.KeyModifiers == KeyModifiers.None && _toile.IsKeyboardFocusWithin)
             {
                 if (e.Key == Key.Left) { _toile.NaviguerSelection(-1, 0); e.Handled = true; }
                 else if (e.Key == Key.Right) { _toile.NaviguerSelection(1, 0); e.Handled = true; }
@@ -806,7 +605,7 @@ namespace MentalO.Marabook
                 case "copier": _toile.CopierSelection(); return true;
                 case "coller": Coller(); return true;
                 case "dupliquer": _toile.DupliquerSelection(); return true;
-                case "rechercher": OuvrirRecherche(); return true;
+                case "rechercher": _panneaux.OuvrirRecherche(); return true;
                 case "editer": _toile.EditerSelection(); return true;
                 case "supprimer": _toile.SupprimerSelection(); return true;
                 case "grouper": _toile.GrouperSelection(); return true;
@@ -826,10 +625,10 @@ namespace MentalO.Marabook
                 case "zoom-100": _toile.ZoomReinitialiser(); return true;
                 case "recentrer": _toile.Recentrer(); return true;
                 case "presentation": BasculerPresentation(); return true;
-                case "mode-automatique": _toile.DefinirMode("automatique"); SyncModes(); return true;
-                case "mode-deplacement": _toile.DefinirMode("deplacement"); SyncModes(); return true;
-                case "mode-liens": _toile.DefinirMode("liens"); SyncModes(); return true;
-                case "mode-lecture": _toile.DefinirMode("lecture"); SyncModes(); return true;
+                case "mode-automatique": _toile.DefinirMode("automatique"); _barres.MettreAJourModes(); return true;
+                case "mode-deplacement": _toile.DefinirMode("deplacement"); _barres.MettreAJourModes(); return true;
+                case "mode-liens": _toile.DefinirMode("liens"); _barres.MettreAJourModes(); return true;
+                case "mode-lecture": _toile.DefinirMode("lecture"); _barres.MettreAJourModes(); return true;
                 case "gras": if (editing && !_toile.EditionEnCours) return false; _toile.AppliquerFormatTexte("gras", null); return true;
                 case "italique": if (editing && !_toile.EditionEnCours) return false; _toile.AppliquerFormatTexte("italique", null); return true;
                 case "souligne": if (editing && !_toile.EditionEnCours) return false; _toile.AppliquerFormatTexte("souligne", null); return true;

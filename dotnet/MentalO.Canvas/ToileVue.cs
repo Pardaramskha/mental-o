@@ -124,6 +124,15 @@ namespace Mentalo.Vue
             SignalerVue();
         }
 
+        /// <summary>Le rectangle entre deux points, QUELS QUE SOIENT leurs ordres : le
+        /// constructeur Rect(Point, Point) d'Avalonia ne normalise pas et donne une
+        /// largeur négative quand on glisse vers la gauche (plantage du 26/10 :
+        /// « -1 is not a valid value for Width »).</summary>
+        public static Rect RectEntre(Point a, Point b)
+        {
+            return new Rect(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y), Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
+        }
+
         public List<Rect> RectanglesNoeuds()
         {
             List<Rect> rectangles = new List<Rect>();

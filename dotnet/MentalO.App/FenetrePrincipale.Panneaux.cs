@@ -19,206 +19,29 @@ namespace Mentalo
     /// le plein écran et la présentation, les modèles, les thèmes et les exports.</summary>
     public partial class FenetrePrincipale
     {
-        // ------------------------------------------------------------------ panneaux flottants
+        // ------------------------------------------------------------------ panneaux flottants (PanneauxFlottants, partagés)
 
-        private Border PanneauFlottant(HorizontalAlignment horizontal, VerticalAlignment vertical, Control contenu)
-        {
-            return new Border
-            {
-                HorizontalAlignment = horizontal,
-                VerticalAlignment = vertical,
-                Margin = new Thickness(12, 10, 12, 10),
-                Background = Chrome.FondPanneau,
-                BorderBrush = Chrome.Bordure,
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(6),
-                Padding = new Thickness(10, 7, 10, 8),
-                IsVisible = false,
-                Child = contenu
-            };
-        }
+        private void MettreAJourMiniCarte() { _panneaux.MettreAJourMiniCarte(); }
+        private void MettreAJourInspecteur() { _panneaux.MettreAJourInspecteur(); }
+        private void MettreAJourHistorique() { _panneaux.MettreAJourHistorique(); }
+        private void MettreAJourPanneauFiltre() { _panneaux.MettreAJourFiltre(); }
 
-        private Border ConstruireMiniCarte()
-        {
-            StackPanel contenu = new StackPanel();
-            contenu.Children.Add(new TextBlock { Text = "Mini-carte", FontWeight = FontWeight.Bold, FontSize = 12, Margin = new Thickness(0, 0, 0, 4) });
-            _miniCanvas = new Canvas
-            {
-                Width = 166,
-                Height = 106,
-                Background = Chrome.FondMiniCarte,
-                ClipToBounds = true
-            };
-            _miniCanvas.PointerPressed += delegate(object expediteur, PointerPressedEventArgs e)
-            {
-                Point p = e.GetPosition(_miniCanvas);
-                _toile.CentrerSur(new Point(_miniOrigine.X + p.X / _miniEchelle, _miniOrigine.Y + p.Y / _miniEchelle));
-            };
-            contenu.Children.Add(_miniCanvas);
-            return PanneauFlottant(HorizontalAlignment.Left, VerticalAlignment.Bottom, contenu);
-        }
-
-        private void MettreAJourMiniCarte()
-        {
-            if (_miniCanvas == null || !_miniCarte.IsVisible) return;
-            _miniCanvas.Children.Clear();
-            double zoom = _toile.Zoom;
-            if (zoom <= 0 || _toile.Bounds.Width <= 0) return;
-            Point origine = _toile.OrigineVue;
-            Rect vue = new Rect(-origine.X / zoom, -origine.Y / zoom,
-                _toile.Bounds.Width / zoom, _toile.Bounds.Height / zoom);
-            Rect monde = vue;
-            List<Rect> rectangles = _toile.RectanglesNoeuds();
-            foreach (Rect r in rectangles) monde = monde.Union(r);
-            if (monde.Width < 1 || monde.Height < 1) return;
-            _miniEchelle = Math.Min(_miniCanvas.Width / monde.Width, _miniCanvas.Height / monde.Height);
-            _miniOrigine = monde.TopLeft;
-            SolidColorBrush gris = new SolidColorBrush(Color.FromRgb(0xA9, 0xA2, 0x97));
-            foreach (Rect r in rectangles)
-            {
-                Rectangle forme = new Rectangle
-                {
-                    Width = Math.Max(2, r.Width * _miniEchelle),
-                    Height = Math.Max(2, r.Height * _miniEchelle),
-                    Fill = gris,
-                    RadiusX = 1,
-                    RadiusY = 1
-                };
-                Canvas.SetLeft(forme, (r.X - monde.X) * _miniEchelle);
-                Canvas.SetTop(forme, (r.Y - monde.Y) * _miniEchelle);
-                _miniCanvas.Children.Add(forme);
-            }
-            Rectangle cadreVue = new Rectangle
-            {
-                Width = Math.Max(4, vue.Width * _miniEchelle),
-                Height = Math.Max(4, vue.Height * _miniEchelle),
-                Stroke = new SolidColorBrush(Color.FromRgb(0x00, 0x78, 0xD7)),
-                StrokeThickness = 1,
-                Fill = new SolidColorBrush(Color.FromArgb(0x18, 0x00, 0x78, 0xD7))
-            };
-            Canvas.SetLeft(cadreVue, (vue.X - monde.X) * _miniEchelle);
-            Canvas.SetTop(cadreVue, (vue.Y - monde.Y) * _miniEchelle);
-            _miniCanvas.Children.Add(cadreVue);
-        }
-
-        private Border ConstruireInspecteur()
-        {
-            StackPanel contenu = new StackPanel();
-            contenu.Children.Add(new TextBlock { Text = "Inspecteur", FontWeight = FontWeight.Bold, FontSize = 12, Margin = new Thickness(0, 0, 0, 4) });
-            _inspecteurTexte = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, MaxWidth = 220 };
-            contenu.Children.Add(_inspecteurTexte);
-            return PanneauFlottant(HorizontalAlignment.Right, VerticalAlignment.Bottom, contenu);
-        }
-
-        private void MettreAJourInspecteur()
-        {
-            if (_inspecteurTexte == null || !_inspecteur.IsVisible) return;
-            _inspecteurTexte.Text = TexteInspecteur(_toile);
-        }
-
-        public static string TexteInspecteur(ToileVue toile)
-        {
-            return PanneauxToile.TexteInspecteur(toile);
-        }
-
-        private Border ConstruireHistorique()
-        {
-            StackPanel contenu = new StackPanel();
-            contenu.Children.Add(new TextBlock { Text = "Historique", FontWeight = FontWeight.Bold, FontSize = 12, Margin = new Thickness(0, 0, 0, 4) });
-            _historiqueTexte = new TextBlock { FontSize = 12 };
-            contenu.Children.Add(_historiqueTexte);
-            StackPanel boutons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 5, 0, 0), Spacing = 4 };
-            Button annuler = new Button { Content = "↶ Annuler", Padding = new Thickness(6, 2), Focusable = false };
-            annuler.Click += delegate { _toile.Historique.Annuler(); };
-            Button retablir = new Button { Content = "↷ Rétablir", Padding = new Thickness(6, 2), Focusable = false };
-            retablir.Click += delegate { _toile.Historique.Refaire(); };
-            boutons.Children.Add(annuler);
-            boutons.Children.Add(retablir);
-            contenu.Children.Add(boutons);
-            return PanneauFlottant(HorizontalAlignment.Left, VerticalAlignment.Top, contenu);
-        }
-
-        private void MettreAJourHistorique()
-        {
-            if (_historiqueTexte == null || !_panneauHistorique.IsVisible) return;
-            _historiqueTexte.Text = string.Format("{0} action(s) annulable(s)\n{1} action(s) rétablissable(s)",
-                _toile.Historique.NbAnnulables, _toile.Historique.NbRefaisables);
-        }
-
+        /// <summary>La visibilité des panneaux suit les Paramètres ; les coches du menu Fenêtres aussi.</summary>
         private void MettreAJourPanneaux()
         {
-            if (_miniCarte == null) return;
-            _miniCarte.IsVisible = ParametresGlobaux.MiniCarteVisible;
-            _inspecteur.IsVisible = ParametresGlobaux.InspecteurVisible;
-            _panneauHistorique.IsVisible = ParametresGlobaux.HistoriqueVisible;
-            if (_panneauFiltre != null)
-            {
-                _panneauFiltre.IsVisible = ParametresGlobaux.FiltreVisible;
-                if (!ParametresGlobaux.FiltreVisible && _toile.FiltreActif) _toile.DefinirFiltreEtiquettes(null, false);
-                if (_menuFiltre != null) Ui.Cocher(_menuFiltre, ParametresGlobaux.FiltreVisible);
-                MettreAJourPanneauFiltre();
-            }
+            _panneaux.MettreAJourTout();
+            if (_menuFiltre != null) Ui.Cocher(_menuFiltre, ParametresGlobaux.FiltreVisible);
             if (_menuMiniCarte != null) Ui.Cocher(_menuMiniCarte, ParametresGlobaux.MiniCarteVisible);
             if (_menuInspecteur != null) Ui.Cocher(_menuInspecteur, ParametresGlobaux.InspecteurVisible);
             if (_menuHistorique != null) Ui.Cocher(_menuHistorique, ParametresGlobaux.HistoriqueVisible);
-            MettreAJourMiniCarte();
-            MettreAJourInspecteur();
-            MettreAJourHistorique();
-        }
-
-        // ------------------------------------------------------------------ filtre par étiquettes (v0.15)
-
-        private Border ConstruirePanneauFiltre()
-        {
-            _filtreContenu = new StackPanel { MinWidth = 170 };
-            Border panneau = PanneauFlottant(HorizontalAlignment.Left, VerticalAlignment.Top, _filtreContenu);
-            panneau.IsVisible = false;
-            return panneau;
-        }
-
-        private void MettreAJourPanneauFiltre()
-        {
-            if (_filtreContenu == null) return;
-            RemplirPanneauFiltre(_filtreContenu, _toile, this);
-        }
-
-        public static void RemplirPanneauFiltre(StackPanel contenu, ToileVue toile, Window proprietaire)
-        {
-            PanneauxToile.RemplirPanneauFiltre(contenu, toile, proprietaire);
-        }
-
-        // ------------------------------------------------------------------ Tust des raccourcis
-
-        private Border ConstruireTust()
-        {
-            _tustContenu = new StackPanel();
-            return new Border
-            {
-                HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(0, 10, 12, 0),
-                Background = Chrome.FondPanneau,
-                BorderBrush = Chrome.Bordure,
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(6),
-                Padding = new Thickness(12, 8, 12, 10),
-                MaxWidth = 290,
-                IsVisible = false,
-                Child = _tustContenu
-            };
+            if (_menuTust != null) Ui.Cocher(_menuTust, ParametresGlobaux.TustVisible);
         }
 
         private void MettreAJourTust()
         {
-            if (_tust == null) return;
             if (_menuTust != null) Ui.Cocher(_menuTust, ParametresGlobaux.TustVisible);
-            _tust.IsVisible = ParametresGlobaux.TustVisible;
-            RemplirTust(_tustContenu);
-        }
-
-        public static void RemplirTust(StackPanel contenu)
-        {
-            PanneauxToile.RemplirTust(contenu);
+            _panneaux.Tust.IsVisible = ParametresGlobaux.TustVisible;
+            _panneaux.MettreAJourTust();
         }
 
         private async void OuvrirPreferencesFichier()
@@ -293,7 +116,7 @@ namespace Mentalo
             DefinirPleinEcran(true);
             MettreAJourMenusAffichage();
             _toile.Focus();
-            _compteurPresentation.IsVisible = true;
+            _panneaux.CompteurPresentation.IsVisible = true;
             // La vue d'ensemble attend que le plein écran ait redimensionné la toile.
             Dispatcher.UIThread.Post(delegate { _toile.PresentationDebut(); }, DispatcherPriority.Loaded);
         }
@@ -306,7 +129,7 @@ namespace Mentalo
             _barreModes.IsVisible = true;
             _barreFormat.IsVisible = true;
             _barreEtat.IsVisible = true;
-            _compteurPresentation.IsVisible = false;
+            _panneaux.CompteurPresentation.IsVisible = false;
             if (_laserActif) BasculerLaser();
             DefinirPleinEcran(false);
             _toile.DefinirMode(string.IsNullOrEmpty(_modeAvantPresentation) ? "automatique" : _modeAvantPresentation);
@@ -321,16 +144,6 @@ namespace Mentalo
         }
 
         // ------------------------------------------------------------------ présentation : laser et compteur (v0.17)
-
-        private Border ConstruireCompteurPresentation()
-        {
-            _compteurPresentationTexte = new TextBlock { Foreground = Chrome.TexteDoux, FontSize = 12 };
-            Border cadre = PanneauFlottant(HorizontalAlignment.Right, VerticalAlignment.Bottom, _compteurPresentationTexte);
-            cadre.Padding = new Thickness(10, 4, 10, 4);
-            cadre.IsVisible = false;
-            Ui.Infobulle(cadre, "→ / Espace : diapositive suivante · ← : précédente · Début : vue d'ensemble · L : pointeur laser · Échap : quitter");
-            return cadre;
-        }
 
         /// <summary>Un point rouge lumineux qui suit la souris (touche L en présentation).</summary>
         private Canvas ConstruireLaser()

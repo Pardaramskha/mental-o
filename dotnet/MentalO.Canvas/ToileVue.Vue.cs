@@ -81,7 +81,7 @@ namespace Mentalo.Vue
                 Point a, b;
                 if (PointsLien(_selectionLien.Modele, out a, out b))
                 {
-                    Rect r = new Rect(a, b);
+                    Rect r = RectEntre(a, b);
                     zone = premier ? r : zone.Union(r);
                     premier = false;
                 }

@@ -32,15 +32,28 @@ namespace MentalO.Marabook
             _host = host;
             Hote.Courant = new HoteMarabook(host);
             // Les réglages de Mental-O vivent à part de ceux de Mental-O seul :
-            // %APPDATA%\Marabook\mental-o\parametres.json (raccourcis, favoris,
+            // <réglages de Marabook>\mental-o\parametres.json (raccourcis, favoris,
             // magnétisme, poignées…) ; le thème suit Marabook (clair / sombre).
+            string dossier = null;
             try
             {
-                ParametresGlobaux.DossierReglages = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Marabook", "mental-o");
+                dossier = Path.Combine(host.SettingsFolder, "mental-o");
+                ParametresGlobaux.DossierReglages = dossier;
             }
             catch { }
+            bool premierLancement = dossier == null || !File.Exists(Path.Combine(dossier, "parametres.json"));
             ParametresGlobaux.Charger();
+            if (premierLancement)
+            {
+                // Dans Marabook, la carte arrive avec ses panneaux : mini-carte,
+                // Tust des raccourcis, inspecteur et historique (menu Fenêtres
+                // de la barre d'actions pour les replier).
+                ParametresGlobaux.MiniCarteVisible = true;
+                ParametresGlobaux.TustVisible = true;
+                ParametresGlobaux.InspecteurVisible = true;
+                ParametresGlobaux.HistoriqueVisible = true;
+                try { ParametresGlobaux.Enregistrer(); } catch { }
+            }
             ParametresGlobaux.ThemeSombre = host.DarkTheme;
             Mentalo.Vue.Chrome.Basculer(host.DarkTheme);
             host.ThemeChanged += delegate
