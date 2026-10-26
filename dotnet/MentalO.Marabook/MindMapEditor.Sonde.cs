@@ -98,10 +98,24 @@ namespace MentalO.Marabook
         /// par programme ne reproduit pas tout ce qu'un clic fait.</summary>
         private static void ClicReel(Control controle)
         {
-            PixelPoint point = controle.PointToScreen(new Point(controle.Bounds.Width / 2, controle.Bounds.Height / 2));
+            ClicReelA(controle, new Point(controle.Bounds.Width / 2, controle.Bounds.Height / 2));
+        }
+
+        private static void ClicReelA(Control controle, Point local)
+        {
+            PixelPoint point = controle.PointToScreen(local);
             SetCursorPos(point.X, point.Y);
             mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero); // LEFTDOWN
             mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero); // LEFTUP
+        }
+
+        /// <summary>Le caret en fin de texte, sans sélection (CommencerEdition sélectionne tout : taper remplacerait).</summary>
+        private static void PlacerCaretFin(TextBox editeur)
+        {
+            int fin = (editeur.Text ?? "").Length;
+            editeur.SelectionStart = fin;
+            editeur.SelectionEnd = fin;
+            editeur.CaretIndex = fin;
         }
 
         private IInputElement FocusActuel()
@@ -137,6 +151,8 @@ namespace MentalO.Marabook
             try
             {
                 await Task.Delay(800);
+                // Au premier plan, et au-dessus de tout : les vrais clics doivent tomber sur Marabook, pas sur le terminal qui l'a lancé.
+                _host.MainWindow.Topmost = true;
                 _host.MainWindow.Activate();
                 try { IPlatformHandle poignee = _host.MainWindow.TryGetPlatformHandle(); if (poignee != null) SetForegroundWindow(poignee.Handle); } catch { }
                 await Task.Delay(300);
@@ -164,7 +180,7 @@ namespace MentalO.Marabook
                 verifier(editeur != null && editeur.NewLine == "\n", "le TextBox d'édition insère « \\n » (pas « \\r\\n »)");
                 if (editeur != null)
                 {
-                    editeur.CaretIndex = (editeur.Text ?? "").Length;
+                    PlacerCaretFin(editeur);
                     editeur.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter, Source = editeur });
                     editeur.RaiseEvent(new TextInputEventArgs { RoutedEvent = InputElement.TextInputEvent, Text = "fin", Source = editeur });
                     await Task.Delay(200);
@@ -179,6 +195,41 @@ namespace MentalO.Marabook
                 verifier(premier.TextePlat == avant + "\nfin", "le texte validé porte « \\nfin » sans « \\r » (" + Echapper(premier.TextePlat) + ")");
                 verifier(r2.Height - r0.Height > 8 && r2.Height - r0.Height < 30, "la boîte grandit d'une seule ligne (" + r0.Height + " → " + r2.Height + ")");
                 verifier(externe != null && externe.IsFocused, "le champ cliqué garde le clavier (la toile ne le reprend pas)");
+
+                // Un vrai clic sur le fond de la toile clôt l'édition (le TextBox ne reste pas ouvert).
+                _toile.AllerAuNoeud(premier);
+                await Task.Delay(200);
+                _toile.EditerSelection();
+                await Task.Delay(400);
+                TextBox editeur2 = FocusActuel() as TextBox;
+                if (editeur2 != null)
+                {
+                    PlacerCaretFin(editeur2);
+                    editeur2.RaiseEvent(new TextInputEventArgs { RoutedEvent = InputElement.TextInputEvent, Text = " bis", Source = editeur2 });
+                    await Task.Delay(150);
+                }
+                ClicReelA(_toile, new Point(25, 25));
+                await Task.Delay(700);
+                verifier(!_toile.EditionEnCours, "un clic sur le fond de la toile termine l'édition");
+                verifier(premier.TextePlat.EndsWith("fin bis"), "…et garde le texte tapé (" + Echapper(premier.TextePlat) + ")");
+
+                // Quitter la carte en pleine édition : Marabook demande Save, qui valide le texte.
+                _toile.AllerAuNoeud(premier);
+                await Task.Delay(200);
+                _toile.EditerSelection();
+                await Task.Delay(400);
+                TextBox editeur3 = FocusActuel() as TextBox;
+                if (editeur3 != null)
+                {
+                    PlacerCaretFin(editeur3);
+                    editeur3.RaiseEvent(new TextInputEventArgs { RoutedEvent = InputElement.TextInputEvent, Text = " ter", Source = editeur3 });
+                    await Task.Delay(150);
+                }
+                verifier(IsDirty, "une édition ouverte rend la carte « modifiée »");
+                byte[] sauve = Save(null);
+                Noeud nSauve = Fichier.Charger(sauve).TrouverNoeud(premier.Id);
+                verifier(!_toile.EditionEnCours && nSauve != null && nSauve.TextePlat.EndsWith("fin bis ter"),
+                    "enregistrer en pleine édition valide et garde le texte (" + (nSauve == null ? "-" : Echapper(nSauve.TextePlat)) + ")");
 
                 // Lien vers une fiche, puis tuile, dans la boîte ; aller-retour .tea.
                 _toile.AllerAuNoeud(premier);

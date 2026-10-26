@@ -1247,6 +1247,16 @@ namespace Mentalo.Vue
 
         /// <summary>Vrai si une boîte est en cours d'édition (les raccourcis de la
         /// fenêtre laissent alors le clavier à l'éditeur).</summary>
+        /// <summary>Clôt (en validant) l'édition ouverte, s'il y en a une : avant
+        /// d'enregistrer ou de changer de document, le texte tapé rejoint le modèle
+        /// sans attendre la perte de focus (26/10 soir — Marabook quittait la carte
+        /// avec le texte encore dans le TextBox).</summary>
+        public void ValiderEditionEnCours()
+        {
+            foreach (NoeudVisuel v in new List<NoeudVisuel>(_selectionnes))
+                if (v.EnEdition) v.TerminerEdition(true);
+        }
+
         public bool EditionEnCours
         {
             get

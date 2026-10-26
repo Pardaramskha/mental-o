@@ -78,12 +78,13 @@ namespace MentalO.Marabook
             _centre.Children.Add(_toile);
             _panneaux.AjouterA(_centre);
 
-            // L'inspecteur du Général (rail de Marabook) et les barres : y cliquer
-            // ne termine pas l'édition d'une boîte.
+            // L'inspecteur du Général (rail de Marabook) : y cliquer ne termine pas
+            // l'édition d'une boîte. Surtout pas le conteneur de la toile : la toile
+            // en fait partie, et un clic sur son fond ne clôturait plus l'édition
+            // (le TextBox restait visible, le texte jamais validé — 26/10 soir).
             _inspecteur = _barres.ConstruireInspecteur(ConstruireExtrasTexte());
             NoeudVisuel.ZonesFormatage.Clear();
             NoeudVisuel.ZonesFormatage.Add(_inspecteur);
-            NoeudVisuel.ZonesFormatage.Add(_root);
 
             // Les liens vers les fiches, les écrits et les tuiles : rendus et ouverts par Marabook.
             NoeudVisuel.RenduHote = RendreHote;
@@ -125,7 +126,10 @@ namespace MentalO.Marabook
         }
 
         public Control View { get { return _root; } }
-        public bool IsDirty { get { return _dirty; } }
+
+        /// <summary>Modifiée — ou en cours d'édition : le texte tapé n'est pas encore
+        /// dans le modèle, Marabook doit demander Save (qui le valide).</summary>
+        public bool IsDirty { get { return _dirty || _toile.EditionEnCours; } }
         public Control Inspector { get { return _inspecteur; } }
 
         public double Zoom { get { return _toile.Zoom * 100; } }
@@ -137,6 +141,7 @@ namespace MentalO.Marabook
 
         public void Load(string itemId, string title, byte[] tea)
         {
+            _toile.ValiderEditionEnCours(); // la carte quittée ne garde pas un TextBox ouvert
             _loading = true;
             try
             {
@@ -169,6 +174,7 @@ namespace MentalO.Marabook
 
         public byte[] Save(byte[] previous)
         {
+            _toile.ValiderEditionEnCours(); // le texte encore dans le TextBox rejoint le modèle avant la sérialisation
             byte[] bytes = Fichier.EnregistrerEnMemoire(_toile.Document, previous);
             _derniersOctets = bytes;
             _dirty = false;
