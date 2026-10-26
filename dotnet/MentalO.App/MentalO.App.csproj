@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- MentalO.App (26/10/2026) : Mental-O seul — la fenêtre principale
+       (menus, barres, panneaux), les paramètres, la mise à jour depuis
+       GitHub, l'association .tea. Avalonia 11 sur .NET 8, un seul code pour
+       Windows, Linux et macOS. -->
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>Mental-O</AssemblyName>
+    <RootNamespace>Mentalo</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <ApplicationIcon>..\..\ressources\mentalo.ico</ApplicationIcon>
+    <Version>1.0.0</Version>
+    <InformationalVersion>1.0.0</InformationalVersion>
+    <SatelliteResourceLanguages>fr</SatelliteResourceLanguages>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+    <NoWarn>CS0618;CS1591;CS4014;SYSLIB0014</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.22" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MentalO.Core\MentalO.Core.csproj" />
+    <ProjectReference Include="..\MentalO.Canvas\MentalO.Canvas.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="..\..\ressources\mentalo.ico" Link="Assets\mentalo.ico" />
+    <AvaloniaResource Include="..\..\ressources\logo.png" Link="Assets\logo.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\VERSION" Link="VERSION" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\ressources\fichier-tea.ico" Link="ressources\fichier-tea.ico" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

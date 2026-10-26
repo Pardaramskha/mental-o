@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- MentalO.Canvas (26/10/2026) : la toile de Mental-O sur Avalonia 11 —
+       boîtes, liens, groupes, édition, menus contextuels, dialogues de la
+       carte. Interface 100 % en code. Partagée par l'application autonome
+       et par le DLC Marabook (même DLL, deux hôtes). -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>MentalO.Canvas</AssemblyName>
+    <RootNamespace>Mentalo.Vue</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <Version>1.0.0</Version>
+    <NoWarn>CS0618;CS1591;CS4014</NoWarn>
+    <SatelliteResourceLanguages>fr</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Skia" Version="11.3.22" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MentalO.Core\MentalO.Core.csproj" />
+  </ItemGroup>
+
+</Project>

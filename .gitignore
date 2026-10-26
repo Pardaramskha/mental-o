@@ -11,3 +11,7 @@ TEXTES-UI.md
 
 # Ce qui part en release GitHub (outils\release.ps1 le régénère)
 dist/
+
+# Chaîne .NET 8 / Avalonia (dotnet/) : sorties de compilation
+dotnet/**/bin/
+dotnet/**/obj/

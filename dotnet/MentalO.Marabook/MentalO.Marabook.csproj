@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- MentalO.Marabook (26/10/2026) : le DLC — la DLL que Marabook charge
+       (« entry » de module.json). Elle est compilée CONTRE Marabook.dll
+       (le contrat IMindMapProvider / IMindMapEditor / IMarabookModule de
+       MindMapApi.cs) et embarque la toile : la même que Mental-O seul.
+       Chemin de Marabook : MARABOOK_DLL (variable d'environnement) ou le
+       dépôt frère, bâti en Release. -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>MentalO.Marabook</AssemblyName>
+    <RootNamespace>MentalO.Marabook</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <Version>1.0.0</Version>
+    <NoWarn>CS0618;CS1591;CS4014</NoWarn>
+    <SatelliteResourceLanguages>fr</SatelliteResourceLanguages>
+    <MarabookDll Condition="'$(MARABOOK_DLL)' != ''">$(MARABOOK_DLL)</MarabookDll>
+    <MarabookDll Condition="'$(MARABOOK_DLL)' == ''">$(MSBuildThisFileDirectory)..\..\..\marabook\dotnet\Marabook.App\bin\Release\net8.0\Marabook.dll</MarabookDll>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.22" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MentalO.Core\MentalO.Core.csproj" />
+    <ProjectReference Include="..\MentalO.Canvas\MentalO.Canvas.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Marabook">
+      <HintPath>$(MarabookDll)</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

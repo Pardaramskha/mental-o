@@ -1,0 +1,22 @@
+{
+  "id": "mental-o",
+  "name": "Mental-O",
+  "title": "Cartes mentales",
+  "version": "1.0.0",
+  "features": [
+    "Une racine « Cartes mentales » dans la Pile (section Structure) : vos cartes vivent dans le projet, enregistrées avec lui",
+    "La toile de Mental-O à la sauce Marabook : boîtes, liens, groupes, images, fichiers, notes, étiquettes, thèmes, présentation",
+    "Chaque carte en tuile sur le tableau, avec son schéma",
+    "Import et export des .tea de Mental-O, export PNG, SVG, Markdown, OPML et JSON Canvas",
+    "Un onglet « Mental-O (dlc) » dans les Préférences, trois succès"
+  ],
+  "entry": {
+    "assembly": "bin/MentalO.Marabook.dll",
+    "type": "MentalO.Marabook.Module"
+  },
+  "achievements": [
+    { "id": "mo-cartographe", "name": "Cartographe mental", "description": "Créez votre première carte mentale.", "rule": "mindmaps", "count": 1 },
+    { "id": "mo-atelier", "name": "Atelier de cartes", "description": "Ayez cinq cartes mentales dans un projet.", "rule": "mindmaps", "count": 5 },
+    { "id": "mo-toile", "name": "Toile d'araignée", "description": "Une carte mentale d'au moins cinquante boîtes.", "rule": "mindmap-nodes", "count": 50 }
+  ]
+}
