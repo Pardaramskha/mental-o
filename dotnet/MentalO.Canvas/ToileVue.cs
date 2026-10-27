@@ -174,6 +174,12 @@ namespace Mentalo.Vue
             // Le pivot par défaut d'Avalonia est le centre : on le ramène au coin.
             _canvas.RenderTransformOrigin = new RelativePoint(0, 0, RelativeUnit.Absolute);
             Child = _canvas;
+            // Une carte chargée avant que la vue ait une taille (27/10/2026) : le
+            // recentrage attend la première mesure, le canevas reste invisible jusque-là.
+            SizeChanged += delegate
+            {
+                if (_recentrageAttendu && Bounds.Width > 0 && Bounds.Height > 0) RecentrerApresChargement();
+            };
 
             for (int i = 0; i < _poignees.Length; i++)
             {
@@ -440,13 +446,31 @@ namespace Mentalo.Vue
             _translation.Y = 0;
             SignalerZoom();
             SignalerFormatCible();
-            // Le recentrage a besoin des tailles mesurées : on attend la passe de rendu.
+            // Le recentrage a besoin des tailles mesurées : on attend la passe de
+            // rendu — et le canevas reste INVISIBLE jusque-là (27/10/2026) : une
+            // image se dessinait à l'origine, en haut à gauche, avant de sauter au
+            // centre (le « flash » à l'ouverture d'une carte dans Marabook). Si la
+            // vue n'a pas encore de taille, SizeChanged finira le travail.
+            _canvas.Opacity = 0;
+            _recentrageAttendu = true;
             Dispatcher.UIThread.Post(delegate
             {
-                if (!ReferenceEquals(Document, document)) return;
-                RafraichirGeometries();
-                Recentrer();
+                if (!ReferenceEquals(Document, document) || !_recentrageAttendu) return;
+                if (Bounds.Width <= 0 || Bounds.Height <= 0) return;
+                RecentrerApresChargement();
             }, DispatcherPriority.Loaded);
+        }
+
+        private bool _recentrageAttendu;
+
+        /// <summary>Le premier recentrage d'une carte chargée : géométries recalées
+        /// sur les tailles mesurées, vue centrée, canevas montré.</summary>
+        private void RecentrerApresChargement()
+        {
+            _recentrageAttendu = false;
+            RafraichirGeometries();
+            Recentrer();
+            _canvas.Opacity = 1;
         }
 
         /// <summary>Après la première mesure : les liens et cadres se recalent sur les tailles réelles.</summary>
