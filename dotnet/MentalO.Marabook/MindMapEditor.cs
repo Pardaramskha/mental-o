@@ -303,9 +303,9 @@ namespace MentalO.Marabook
             _degrouper = BoutonGrand("group", "Dégrouper", "Dégrouper : dissoudre le groupe (" + Geste("degrouper") + ")", delegate { _toile.DegrouperSelection(); });
             TeinterDegrouper();
             groupe.Children.Add(_degrouper);
-            _plier = Bouton("fold", null, "Plier le groupe : ses boîtes se cachent derrière une pastille-titre (" + Geste("plier") + ")", Buttons.Look.Outline, delegate { _toile.BasculerPliageCible(); });
+            _plier = BoutonGrand("fold", "Plier", "Plier le groupe : ses boîtes se cachent derrière une pastille-titre (" + Geste("plier") + ")", delegate { _toile.BasculerPliageCible(); });
             groupe.Children.Add(_plier);
-            _deplier = Bouton("unfold", null, "Déplier le groupe : ses boîtes reviennent (" + Geste("plier") + ")", Buttons.Look.Outline, delegate { _toile.BasculerPliageCible(); });
+            _deplier = BoutonGrand("unfold", "Déplier", "Déplier le groupe : ses boîtes reviennent (" + Geste("plier") + ")", delegate { _toile.BasculerPliageCible(); });
             groupe.Children.Add(_deplier);
             extras.Groupe = groupe;
             return extras;
