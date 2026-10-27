@@ -88,7 +88,7 @@ namespace Mentalo.Vue
         private Panel Rangee(Panel panneau)
         {
             if (!_vertical) return panneau;
-            WrapPanel rangee = new WrapPanel { Orientation = Orientation.Horizontal };
+            WrapPanel rangee = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 5) };
             panneau.Children.Add(rangee);
             return rangee;
         }
@@ -362,7 +362,7 @@ namespace Mentalo.Vue
         /// <summary>Empile une petite étiquette au-dessus d'un contrôle de barre d'outils.</summary>
         private StackPanel AvecEtiquette(string etiquette, Control controle)
         {
-            StackPanel pile = new StackPanel { Margin = _vertical ? new Thickness(0, 0, 6, 6) : new Thickness(0, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center };
+            StackPanel pile = new StackPanel { Margin = _vertical ? new Thickness(0, 0, 6, 2) : new Thickness(0, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center };
             pile.Children.Add(new TextBlock
             {
                 Text = etiquette,

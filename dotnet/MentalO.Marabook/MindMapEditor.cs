@@ -341,6 +341,7 @@ namespace MentalO.Marabook
         private Button BoutonGrand(string icon, string label, string tooltip, Action onClick)
         {
             Button button = Buttons.Big(icon, label, tooltip, EditorView.RibbonHeight, Buttons.Look.Outline);
+            button.Width = 78; // la même largeur pour tous (« Note » comme « Étiquettes »)
             button.Margin = new Thickness(0, 0, 4, 2);
             button.Click += delegate { onClick(); if (!_toile.EditionEnCours) _toile.Focus(); };
             return button;

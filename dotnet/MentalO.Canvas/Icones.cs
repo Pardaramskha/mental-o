@@ -51,7 +51,7 @@ namespace Mentalo.Vue
             string donnees;
             if (!Traces.TryGetValue(nom, out donnees))
                 return new TextBlock { Text = "?" };
-            Path chemin = new Path();
+            Path chemin = new Icone();
             chemin.Data = Geometry.Parse(donnees);
             chemin.Fill = pinceau;
             chemin.Width = taille;
@@ -60,6 +60,27 @@ namespace Mentalo.Vue
             chemin.VerticalAlignment = VerticalAlignment.Center;
             chemin.HorizontalAlignment = HorizontalAlignment.Center;
             return chemin;
+        }
+
+        /// <summary>Un Path CENTRÉ dans sa case (27/10/2026, repris de Marabook) : le
+        /// Shape d'Avalonia occupe toute la taille arrangée et cale la géométrie
+        /// étirée en haut à gauche — une icône plus large que haute (les
+        /// alignements, les listes) flottait vers le haut de son bouton. En rendant
+        /// la taille réelle du dessin, l'alignement centré fait le reste.</summary>
+        private sealed class Icone : Path
+        {
+            protected override System.Type StyleKeyOverride { get { return typeof(Path); } }
+
+            protected override Size ArrangeOverride(Size finalSize)
+            {
+                Size size = base.ArrangeOverride(finalSize);
+                Geometry geometry = Data;
+                if (geometry == null || Stretch != Stretch.Uniform) return size;
+                Rect bounds = geometry.Bounds;
+                if (bounds.Width <= 0 || bounds.Height <= 0 || finalSize.Width <= 0 || finalSize.Height <= 0) return size;
+                double scale = System.Math.Min(finalSize.Width / bounds.Width, finalSize.Height / bounds.Height);
+                return new Size(bounds.Width * scale, bounds.Height * scale);
+            }
         }
     }
 }
