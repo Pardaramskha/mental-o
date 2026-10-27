@@ -216,27 +216,19 @@ namespace Mentalo.Vue
             return defilement;
         }
 
-        private static Grid LigneAction(DefinitionAction action)
+        /// <summary>Le champ qui capture un raccourci (clic, puis la touche avec ses
+        /// modificateurs ; Échap annule) ; « apresChangement » rafraîchit les conflits.
+        /// Public : l'onglet de Marabook compose ses lignes avec ses propres boutons (27/10/2026).</summary>
+        public static TextBox ChampCapture(string id, Action apresChangement)
         {
-            Grid ligne = new Grid { Margin = new Thickness(8, 2, 0, 2) };
-            ligne.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(230)));
-            ligne.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(150)));
-            ligne.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
-            ligne.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
-
-            TextBlock nom = new TextBlock { Text = action.Nom, VerticalAlignment = VerticalAlignment.Center };
-            Grid.SetColumn(nom, 0);
-            ligne.Children.Add(nom);
-
             TextBox capture = new TextBox
             {
                 IsReadOnly = true,
                 Width = 140,
                 HorizontalAlignment = HorizontalAlignment.Left,
-                Text = ParametresGlobaux.AfficherGeste(ParametresGlobaux.Geste(action.Id))
+                Text = ParametresGlobaux.AfficherGeste(ParametresGlobaux.Geste(id))
             };
             Ui.Infobulle(capture, "Cliquez puis tapez le nouveau raccourci (Échap pour annuler)");
-            string id = action.Id;
             capture.AddHandler(InputElement.KeyDownEvent, delegate(object expediteur, KeyEventArgs e)
             {
                 e.Handled = true;
@@ -249,8 +241,25 @@ namespace Mentalo.Vue
                 string geste = ParametresGlobaux.ComposerGeste(touche, e.KeyModifiers);
                 ParametresGlobaux.Raccourcis[id] = geste;
                 capture.Text = ParametresGlobaux.AfficherGeste(geste);
-                if (_actualiserConflits != null) _actualiserConflits();
+                if (apresChangement != null) apresChangement();
             }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+            return capture;
+        }
+
+        private static Grid LigneAction(DefinitionAction action)
+        {
+            Grid ligne = new Grid { Margin = new Thickness(8, 2, 0, 2) };
+            ligne.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(230)));
+            ligne.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(150)));
+            ligne.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+            ligne.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+
+            TextBlock nom = new TextBlock { Text = action.Nom, VerticalAlignment = VerticalAlignment.Center };
+            Grid.SetColumn(nom, 0);
+            ligne.Children.Add(nom);
+
+            string id = action.Id;
+            TextBox capture = ChampCapture(id, _actualiserConflits);
             Grid.SetColumn(capture, 1);
             ligne.Children.Add(capture);
 

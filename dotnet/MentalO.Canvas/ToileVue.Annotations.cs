@@ -180,7 +180,9 @@ namespace Mentalo.Vue
 
         /// <summary>Le sous-menu « Étiquettes » des menus contextuels (boîte ou groupe) : une
         /// case par étiquette du fichier, cochée si toute la cible la porte, puis création et gestion.</summary>
-        private MenuItem ConstruireMenuEtiquettes()
+        /// <summary>Le sous-menu des étiquettes de la sélection (cocher / décocher,
+        /// nouvelle, gérer) ; public pour le bouton « Étiquettes » d'un hôte (27/10/2026).</summary>
+        public MenuItem ConstruireMenuEtiquettes()
         {
             MenuItem racine = Ui.SousMenu("Étiquettes");
             List<Noeud> cibles = _groupeActif != null ? NoeudsDuGroupe(_groupeActif) : ModelesSelectionnes();

@@ -64,6 +64,9 @@ namespace MentalO.Marabook
             // fenêtre sont les siennes ; Dupliquer a son bouton, le double-clic
             // édite, les modes et la présentation n'ont pas de raccourci.
             foreach (string id in ActionsEcartees) ParametresGlobaux.ActionsMasquees.Add(id);
+            // Le .plot de Marabook enregistre déjà la carte : pas d'« enregistrement
+            // automatique toutes les 3 minutes » dans les préférences de la carte (27/10).
+            DialoguePreferencesFichier.AvecSauvegardeAuto = false;
             ParametresGlobaux.ThemeSombre = host.DarkTheme;
             Mentalo.Vue.Chrome.Basculer(host.DarkTheme);
             MindMapEditor.OuvrirCarteDeSondeSiDemandee(host); // MENTALO_SONDE : la sonde ouvre elle-même la carte de démo

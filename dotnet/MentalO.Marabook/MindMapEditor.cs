@@ -16,19 +16,22 @@ using Ui = Mentalo.Vue.Ui;
 
 namespace MentalO.Marabook
 {
-    /// <summary>L'ÉDITEUR DE CARTE À LA SAUCE MARABOOK (26/10/2026, refondu deux
-    /// fois le même jour) : en haut la barre des menus — Édition, Insertion,
-    /// Disposition, Affichage, Fenêtres | Thème, Carte, Exporter | Rechercher —,
-    /// dessous la barre des boîtes — Nouvelle boîte, Dupliquer, enfant, sœur, et
-    /// les modes —, puis la toile et ses panneaux flottants (mini-carte, Tust,
-    /// inspecteur de sélection, filtre, recherche). Les réglages de l'élément
-    /// sélectionné (texte en édition, boîte, lien, groupe) vivent dans le Général
-    /// du rail de Marabook (Inspector) ; le zoom dans sa barre d'état. Un clic
-    /// sélectionne une boîte, un double-clic l'édite. Ctrl+K lie une fiche,
-    /// Ctrl+L un écrit, et l'inspecteur (Texte) insère la tuile de n'importe quel
-    /// élément du projet. Les raccourcis sont ceux de Préférences > Mental-O
-    /// (dlc), moins ceux que Marabook écarte (Module.ActionsEcartees). La carte
-    /// arrive en octets .tea et repart en octets .tea.</summary>
+    /// <summary>L'ÉDITEUR DE CARTE À LA SAUCE MARABOOK (26/10/2026, refondu le
+    /// 27/10) : en haut la barre des menus — Insertion, Disposition, Affichage,
+    /// Fenêtres | Thème, Carte, Exporter (icônes seules) — et, à droite, le champ
+    /// de recherche dans la carte (Ctrl+F) ; dessous la barre des boîtes —
+    /// Nouvelle boîte, Dupliquer et les modes —, puis la toile et ses panneaux
+    /// flottants (mini-carte, Tust, inspecteur de sélection, filtre). Les
+    /// réglages de l'élément sélectionné (texte en édition, boîte, lien, groupe)
+    /// vivent dans le Général du rail de Marabook (Inspector), avec les boutons
+    /// carrés de l'hôte : note et étiquettes de la boîte, grouper une sélection
+    /// multiple, dégrouper et plier / déplier un groupe. Le zoom est dans la
+    /// barre d'état de Marabook. Un clic sélectionne une boîte, un double-clic
+    /// l'édite. Ctrl+K lie une fiche, Ctrl+L un écrit, et l'inspecteur (Texte)
+    /// insère la tuile de n'importe quel élément du projet. Les raccourcis sont
+    /// ceux de Préférences > Mental-O (dlc), moins ceux que Marabook écarte
+    /// (Module.ActionsEcartees). La carte arrive en octets .tea et repart en
+    /// octets .tea ; les versions antérieures sont l'affaire du .plot.</summary>
     public partial class MindMapEditor : IMindMapEditor
     {
         /// <summary>L'éditeur affiché (un seul par session Marabook).</summary>
@@ -42,10 +45,13 @@ namespace MentalO.Marabook
         private readonly BarresToile _barres;
         private readonly PanneauxFlottants _panneaux;
         private readonly Control _inspecteur;
-        private Button _dupliquer, _enfant, _soeur;
+        private Button _dupliquer, _note, _etiquettes, _grouper, _degrouper, _plier, _deplier;
+        private TextBox _champRecherche;
+        private TextBlock _compteurRecherche;
+        private List<Noeud> _resultats = new List<Noeud>();
+        private int _indiceResultat;
         private string _itemId;
         private bool _dirty, _loading;
-        private byte[] _derniersOctets;
 
         public event Action Changed;
         public event Action<double> ZoomChanged;
@@ -82,7 +88,7 @@ namespace MentalO.Marabook
             // l'édition d'une boîte. Surtout pas le conteneur de la toile : la toile
             // en fait partie, et un clic sur son fond ne clôturait plus l'édition
             // (le TextBox restait visible, le texte jamais validé — 26/10 soir).
-            _inspecteur = _barres.ConstruireInspecteur(ConstruireExtrasTexte());
+            _inspecteur = _barres.ConstruireInspecteur(ConstruireExtras());
             NoeudVisuel.ZonesFormatage.Clear();
             NoeudVisuel.ZonesFormatage.Add(_inspecteur);
 
@@ -97,6 +103,7 @@ namespace MentalO.Marabook
 
             _toile.DocumentModifie += delegate
             {
+                MettreAJourBoutons(); // un groupe plié / déplié change l'icône
                 if (_loading) return;
                 _dirty = true;
                 Action handler = Changed;
@@ -146,7 +153,6 @@ namespace MentalO.Marabook
             try
             {
                 _itemId = itemId;
-                _derniersOctets = tea;
                 DocumentCarte document = null;
                 if (tea != null && tea.Length > 0)
                 {
@@ -165,6 +171,7 @@ namespace MentalO.Marabook
                 _barres.MettreAJourFormat();
                 _barres.MettreAJourModes();
                 _panneaux.MettreAJourTout();
+                if (_champRecherche != null && !string.IsNullOrEmpty(_champRecherche.Text)) _champRecherche.Text = "";
                 MettreAJourBoutons();
             }
             finally { _loading = false; }
@@ -176,17 +183,17 @@ namespace MentalO.Marabook
         {
             _toile.ValiderEditionEnCours(); // le texte encore dans le TextBox rejoint le modèle avant la sérialisation
             byte[] bytes = Fichier.EnregistrerEnMemoire(_toile.Document, previous);
-            _derniersOctets = bytes;
             _dirty = false;
             return bytes;
         }
 
-        /// <summary>Le thème de Marabook a changé : le fond de la toile et les
-        /// boîtes aux couleurs d'usine suivent (clair / sombre).</summary>
+        /// <summary>Le thème de Marabook a changé : le fond de la toile, les boîtes
+        /// aux couleurs d'usine et la teinte du bouton Dégrouper suivent.</summary>
         public void ThemeChange()
         {
             _toile.AppliquerFondDocument();
             _panneaux.MettreAJourMiniCarte();
+            TeinterDegrouper();
         }
 
         /// <summary>Les Paramètres (onglet Mental-O des Préférences) ont changé :
@@ -198,22 +205,29 @@ namespace MentalO.Marabook
 
         // ============================================================ les barres
 
+        /// <summary>Les menus à gauche (sans icône), les trois boutons-icônes (thème,
+        /// carte, exporter), et le champ de recherche calé à droite (27/10/2026).</summary>
         private Control ConstruireBarreMenus()
         {
-            WrapPanel bar = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 5, 10, 3) };
-            bar.Children.Add(BoutonMenu("pencil-simple-line", "Édition", "Annuler, copier, dupliquer, rechercher, note, étiquettes, supprimer, grouper, plier", MenuEdition));
-            bar.Children.Add(BoutonMenu("image-square-bold", "Insertion", "Image, fichier, lien web, lien vers une fiche ou un écrit, tuile, texte à puces", MenuInsertion));
-            bar.Children.Add(BoutonMenu("align-justify", "Disposition", "Aligner et distribuer, empiler, ranger en arbre", MenuDisposition));
-            bar.Children.Add(BoutonMenu("magnifying-glass-bold", "Affichage", "Zoom, recentrer, tout voir, mettre en avant", MenuAffichage));
-            bar.Children.Add(BoutonMenu("grid", "Fenêtres", "Les panneaux flottants : Tust, mini-carte, inspecteur, filtre", MenuFenetres));
-            bar.Children.Add(_habillage.Separateur());
+            Grid bar = new Grid { Margin = new Thickness(10, 5, 10, 3) };
+            bar.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+            bar.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
 
-            bar.Children.Add(BoutonMenu("palette", "Thème", "Thème de carte : fond, boîtes et liens d'un coup", MenuThemes));
-            bar.Children.Add(BoutonMenu("gear-six-bold", "Carte", "Préférences de la carte, étiquettes, versions antérieures", MenuCarte));
-            bar.Children.Add(BoutonMenu("file-arrow-down-bold", "Exporter", "La carte en image, PDF, dessin, texte, plan ou canevas", MenuExporter));
-            bar.Children.Add(_habillage.Separateur());
+            WrapPanel menus = new WrapPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            menus.Children.Add(BoutonMenu(null, "Insertion", "Image, fichier, lien web, lien vers une fiche ou un écrit, tuile, texte à puces", MenuInsertion));
+            menus.Children.Add(BoutonMenu(null, "Disposition", "Aligner et distribuer, empiler, ranger en arbre", MenuDisposition));
+            menus.Children.Add(BoutonMenu(null, "Affichage", "Zoom, recentrer, tout voir, mettre en avant", MenuAffichage));
+            menus.Children.Add(BoutonMenu(null, "Fenêtres", "Les panneaux flottants : Tust, mini-carte, inspecteur, filtre", MenuFenetres));
+            menus.Children.Add(_habillage.Separateur());
+            menus.Children.Add(BoutonMenu("palette", null, "Thème de carte : fond, boîtes et liens d'un coup", MenuThemes));
+            menus.Children.Add(BoutonMenu("gear-six-bold", null, "Carte : préférences de la carte, étiquettes", MenuCarte));
+            menus.Children.Add(BoutonMenu("file-arrow-down-bold", null, "Exporter la carte en image, PDF, dessin, texte, plan ou canevas", MenuExporter));
+            Grid.SetColumn(menus, 0);
+            bar.Children.Add(menus);
 
-            bar.Children.Add(Bouton("file-magnifying-glass", null, "Rechercher dans la carte (" + Geste("rechercher") + ")", Buttons.Look.Calm, delegate { _panneaux.OuvrirRecherche(); }));
+            Control recherche = ConstruireRecherche();
+            Grid.SetColumn(recherche, 1);
+            bar.Children.Add(recherche);
             return bar;
         }
 
@@ -223,34 +237,84 @@ namespace MentalO.Marabook
             bar.Children.Add(Bouton("plus-bold", "Nouvelle boîte", "Une boîte au centre de la vue (ou double-clic sur le fond)", Buttons.Look.Primary, delegate { _toile.CreerBoiteAuCentre(); }));
             _dupliquer = Bouton("copy-simple-bold", "Dupliquer", "Une copie des boîtes sélectionnées, posée à côté", Buttons.Look.Outline, delegate { _toile.DupliquerSelection(); });
             bar.Children.Add(_dupliquer);
-            _enfant = Bouton("arrow-right-bold", null, "Une boîte enfant, reliée par une flèche (Tab)", Buttons.Look.Calm, delegate { _toile.CreerBoiteEnfant(); });
-            bar.Children.Add(_enfant);
-            _soeur = Bouton("arrow-up-right-bold", null, "Une boîte sœur sous la sélection (Entrée)", Buttons.Look.Calm, delegate { _toile.CreerBoiteSoeur(); });
-            bar.Children.Add(_soeur);
             bar.Children.Add(_habillage.Separateur());
             bar.Children.Add(_barres.ConstruirePanneauModes(false));
             return bar;
         }
 
-        /// <summary>Dupliquer, enfant et sœur veulent une boîte sélectionnée (et pas le mode lecture).</summary>
+        /// <summary>Les boutons suivent la sélection : Dupliquer, Note et Étiquettes
+        /// veulent une boîte ; Grouper deux boîtes ; Dégrouper et Plier / Déplier
+        /// un groupe (l'icône dit ce que le clic fera) — jamais en mode lecture.</summary>
         private void MettreAJourBoutons()
         {
-            if (_dupliquer == null) return;
-            bool boite = _toile.NoeudSelectionne != null && _toile.Mode != "lecture";
+            if (_dupliquer == null || _plier == null) return;
+            bool lecture = _toile.Mode == "lecture";
+            bool boite = _toile.NoeudSelectionne != null && !lecture;
             _dupliquer.IsEnabled = boite;
-            _enfant.IsEnabled = boite;
-            _soeur.IsEnabled = boite;
+            _note.IsEnabled = boite;
+            _etiquettes.IsEnabled = boite;
+            _grouper.IsEnabled = _toile.NbSelectionnes >= 2 && !lecture;
+            Groupe groupe = _toile.GroupeSelectionne;
+            _degrouper.IsEnabled = groupe != null && !lecture;
+            if (groupe != null)
+            {
+                int n = groupe.NoeudIds.Count;
+                ToolTip.SetTip(_degrouper, "Dégrouper : dissoudre le groupe, ses " + n + (n > 1 ? " éléments" : " élément") + " restent sur la carte (" + Geste("degrouper") + ")");
+            }
+            bool plie = groupe != null && groupe.Plie;
+            _plier.IsVisible = !plie;
+            _deplier.IsVisible = plie;
+            _plier.IsEnabled = groupe != null && !lecture;
+            _deplier.IsEnabled = groupe != null && !lecture;
         }
 
-        /// <summary>En tête de la section Texte de l'inspecteur : lien vers une
-        /// fiche, vers un écrit, tuile d'un élément — comme dans l'éditeur de fiches.</summary>
-        private Control ConstruireExtrasTexte()
+        /// <summary>Les boutons de l'hôte dans l'inspecteur du rail (27/10/2026) : en
+        /// tête de Texte, les liens vers une fiche, un écrit, une tuile ; sous la
+        /// Boîte, la note et les étiquettes ; sous le compte d'une sélection,
+        /// Grouper ; sous celui d'un groupe, Dégrouper (teinté orange : il défait)
+        /// et Plier / Déplier.</summary>
+        private ExtrasInspecteur ConstruireExtras()
         {
-            WrapPanel ligne = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
-            ligne.Children.Add(Bouton("fiche-individual", null, "Lien vers une fiche (" + global::Marabook.App.Ui.Keys("Ctrl+K") + ") : la fiche choisie se pose en lien dans la boîte sélectionnée", Buttons.Look.Calm, delegate { LierFiche(); }));
-            ligne.Children.Add(Bouton("document", null, "Lien vers un écrit (" + global::Marabook.App.Ui.Keys("Ctrl+L") + ") : l'écrit choisi se pose en lien dans la boîte sélectionnée", Buttons.Look.Calm, delegate { LierTexte(); }));
-            ligne.Children.Add(Bouton("grid", null, "Insérer une tuile : n'importe quel élément du projet, montré comme sur son tableau (clic droit sur la tuile : normal ou condensé)", Buttons.Look.Calm, delegate { InsererTuile(); }));
-            return ligne;
+            ExtrasInspecteur extras = new ExtrasInspecteur();
+
+            WrapPanel texte = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
+            texte.Children.Add(Bouton("fiche-individual", null, "Lien vers une fiche (" + global::Marabook.App.Ui.Keys("Ctrl+K") + ") : la fiche choisie se pose en lien dans la boîte sélectionnée", Buttons.Look.Calm, delegate { LierFiche(); }));
+            texte.Children.Add(Bouton("document", null, "Lien vers un écrit (" + global::Marabook.App.Ui.Keys("Ctrl+L") + ") : l'écrit choisi se pose en lien dans la boîte sélectionnée", Buttons.Look.Calm, delegate { LierTexte(); }));
+            texte.Children.Add(Bouton("tuile", null, "Insérer une tuile : n'importe quel élément du projet, montré comme sur son tableau (clic droit sur la tuile : normal ou condensé)", Buttons.Look.Calm, delegate { InsererTuile(); }));
+            extras.Texte = texte;
+
+            WrapPanel boite = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
+            _note = Bouton("document", null, "Note de la boîte (" + Geste("note") + ") : un détail hors de la carte — une icône dans le coin, la note en infobulle", Buttons.Look.Outline, delegate { _toile.EditerNoteSelection(); });
+            boite.Children.Add(_note);
+            _etiquettes = Bouton("tag", null, "Étiquettes de la boîte : cocher celles qu'elle porte, en créer, les gérer", Buttons.Look.Outline, delegate { });
+            AttacherMenu(_etiquettes, MenuEtiquettes);
+            boite.Children.Add(_etiquettes);
+            extras.Boite = boite;
+
+            WrapPanel selection = new WrapPanel { Orientation = Orientation.Horizontal };
+            _grouper = Bouton("group", null, "Grouper les boîtes sélectionnées : elles se déplacent d'un bloc, dans un cadre (" + Geste("grouper") + ")", Buttons.Look.Outline, delegate { _toile.GrouperSelection(); });
+            selection.Children.Add(_grouper);
+            extras.Selection = selection;
+
+            WrapPanel groupe = new WrapPanel { Orientation = Orientation.Horizontal };
+            _degrouper = Bouton("group", null, "Dégrouper : dissoudre le groupe (" + Geste("degrouper") + ")", Buttons.Look.Outline, delegate { _toile.DegrouperSelection(); });
+            TeinterDegrouper();
+            groupe.Children.Add(_degrouper);
+            _plier = Bouton("fold", null, "Plier le groupe : ses boîtes se cachent derrière une pastille-titre (" + Geste("plier") + ")", Buttons.Look.Outline, delegate { _toile.BasculerPliageCible(); });
+            groupe.Children.Add(_plier);
+            _deplier = Bouton("unfold", null, "Déplier le groupe : ses boîtes reviennent (" + Geste("plier") + ")", Buttons.Look.Outline, delegate { _toile.BasculerPliageCible(); });
+            groupe.Children.Add(_deplier);
+            extras.Groupe = groupe;
+            return extras;
+        }
+
+        /// <summary>Dégrouper en léger orange (la couleur d'alerte de Marabook, voilée) :
+        /// il défait quelque chose. Refait au changement de thème.</summary>
+        private void TeinterDegrouper()
+        {
+            if (_degrouper == null) return;
+            _degrouper.Background = new SolidColorBrush(Chrome.Warn.Color, 0.16);
+            _degrouper.BorderBrush = new SolidColorBrush(Chrome.Warn.Color, 0.7);
         }
 
         private static string Geste(string id)
@@ -269,11 +333,23 @@ namespace MentalO.Marabook
             return button;
         }
 
-        /// <summary>Un bouton qui déroule un menu reconstruit à chaque ouverture (les coches suivent l'état).</summary>
+        /// <summary>Un bouton de la barre des menus : texte seul (« Insertion ▾ ») ou
+        /// icône seule (thème, carte, exporter) ; il déroule un menu reconstruit à
+        /// chaque ouverture (les coches suivent l'état).</summary>
         private Button BoutonMenu(string icon, string label, string tooltip, Func<List<Control>> contenu)
         {
-            Button button = Buttons.IconText(icon, label + " ▾", tooltip, Buttons.Compact, Buttons.Look.Calm);
+            Button button = label == null
+                ? Buttons.Icon(icon, tooltip, Buttons.Compact, Buttons.Look.Calm)
+                : Buttons.Text(label + " ▾", tooltip, Buttons.Compact, Buttons.Look.Calm);
             button.Margin = new Thickness(0, 0, 4, 2);
+            AttacherMenu(button, contenu);
+            return button;
+        }
+
+        /// <summary>Le clic sur le bouton ouvre le menu sous lui ; l'édition en cours
+        /// survit au menu (ProtectionFocus) et la toile reprend le clavier après.</summary>
+        private void AttacherMenu(Button button, Func<List<Control>> contenu)
+        {
             button.Click += delegate
             {
                 ContextMenu menu = new ContextMenu { Placement = PlacementMode.BottomEdgeAlignedLeft };
@@ -282,7 +358,6 @@ namespace MentalO.Marabook
                 menu.Closed += delegate { NoeudVisuel.ProtectionFocus = false; if (!_toile.EditionEnCours) _toile.Focus(); };
                 menu.Open(button);
             };
-            return button;
         }
 
         private MenuItem Entree(string entete, string idAction, Action clic)
@@ -301,32 +376,18 @@ namespace MentalO.Marabook
             return Ui.Element(entete, clic, coche);
         }
 
-        private List<Control> MenuEdition()
+        /// <summary>Le menu du bouton Étiquettes : les entrées du sous-menu de la
+        /// toile (cocher / décocher, nouvelle, gérer), détachées de leur sous-menu.</summary>
+        private List<Control> MenuEtiquettes()
         {
             List<Control> items = new List<Control>();
-            MenuItem annuler = Entree("Annuler", "annuler", delegate { _toile.Historique.Annuler(); });
-            annuler.IsEnabled = _toile.Historique.PeutAnnuler;
-            items.Add(annuler);
-            MenuItem retablir = Entree("Rétablir", "retablir", delegate { _toile.Historique.Refaire(); });
-            retablir.IsEnabled = _toile.Historique.PeutRefaire;
-            items.Add(retablir);
-            items.Add(Ui.Separateur());
-            items.Add(Entree("Copier les boîtes", "copier", delegate { _toile.CopierSelection(); }));
-            items.Add(Entree("Coller", "coller", delegate { Coller(); }));
-            items.Add(Entree("Dupliquer", delegate { _toile.DupliquerSelection(); }));
-            items.Add(Ui.Separateur());
-            items.Add(Entree("Rechercher…", "rechercher", delegate { _panneaux.OuvrirRecherche(); }));
-            items.Add(Entree("Tout sélectionner", "tout-selectionner", delegate { _toile.SelectionnerTout(); }));
-            items.Add(Ui.Separateur());
-            items.Add(Entree("Modifier la boîte sélectionnée (double-clic)", delegate { _toile.EditerSelection(); }));
-            items.Add(Entree("Note de la boîte…", "note", delegate { _toile.EditerNoteSelection(); }));
-            items.Add(Entree("Étiquettes de la carte…", delegate { DialogueEtiquettes.Ouvrir(_host.MainWindow, _toile); }));
-            items.Add(Ui.Separateur());
-            items.Add(Entree("Supprimer la sélection", "supprimer", delegate { _toile.SupprimerSelection(); }));
-            items.Add(Ui.Separateur());
-            items.Add(Entree("Grouper", "grouper", delegate { _toile.GrouperSelection(); }));
-            items.Add(Entree("Dégrouper", "degrouper", delegate { _toile.DegrouperSelection(); }));
-            items.Add(Entree("Plier / déplier le groupe", "plier", delegate { _toile.BasculerPliageCible(); }));
+            MenuItem sousMenu = _toile.ConstruireMenuEtiquettes();
+            foreach (object element in sousMenu.Items)
+            {
+                Control controle = element as Control;
+                if (controle != null) items.Add(controle);
+            }
+            sousMenu.Items.Clear();
             return items;
         }
 
@@ -427,7 +488,6 @@ namespace MentalO.Marabook
             List<Control> items = new List<Control>();
             items.Add(Entree("Préférences de la carte…", delegate { OuvrirPreferencesFichier(); }));
             items.Add(Entree("Étiquettes de la carte…", delegate { DialogueEtiquettes.Ouvrir(_host.MainWindow, _toile); }));
-            items.Add(Entree("Versions antérieures…", delegate { OuvrirVersions(); }));
             return items;
         }
 
@@ -443,6 +503,80 @@ namespace MentalO.Marabook
             items.Add(Ui.Separateur());
             items.Add(Entree("Carte Mental-O (.tea)…", delegate { Exporter("tea", "Carte Mental-O"); }));
             return items;
+        }
+
+        // ============================================================ recherche dans la carte
+
+        /// <summary>Le champ de recherche de la barre des menus (27/10/2026) : taper
+        /// va à la première boîte trouvée, Entrée à la suivante, Maj+Entrée à la
+        /// précédente, Échap vide le champ et rend le clavier à la toile. Ctrl+F
+        /// (le geste « rechercher ») y amène le curseur.</summary>
+        private Control ConstruireRecherche()
+        {
+            StackPanel ligne = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            _champRecherche = new TextBox
+            {
+                Width = 180,
+                Height = Buttons.Compact,
+                MinHeight = Buttons.Compact,
+                Watermark = "Rechercher dans la carte",
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 0, 2)
+            };
+            ToolTip.SetTip(_champRecherche, "Rechercher dans la carte (" + Geste("rechercher") + ") : texte, note, étiquettes et pièces jointes des boîtes — Entrée : suivante, Maj+Entrée : précédente, Échap : retour à la carte");
+            _champRecherche.PropertyChanged += delegate(object expediteur, AvaloniaPropertyChangedEventArgs e)
+            {
+                if (e.Property == TextBox.TextProperty) ActualiserRecherche(true);
+            };
+            _champRecherche.AddHandler(InputElement.KeyDownEvent, delegate(object expediteur, KeyEventArgs e)
+            {
+                if (e.Key == Key.Enter) { NaviguerRecherche((e.KeyModifiers & KeyModifiers.Shift) != 0 ? -1 : 1); e.Handled = true; }
+                else if (e.Key == Key.Escape) { _champRecherche.Text = ""; _toile.Focus(); e.Handled = true; }
+            }, RoutingStrategies.Tunnel);
+            ligne.Children.Add(_champRecherche);
+            _compteurRecherche = new TextBlock
+            {
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(6, 0, 2, 2),
+                Foreground = Chrome.SoftText,
+                FontSize = 12,
+                MinWidth = 30,
+                TextAlignment = TextAlignment.Center
+            };
+            ligne.Children.Add(_compteurRecherche);
+            Button precedent = Buttons.Icon("caret-left-bold", "Occurrence précédente (Maj+Entrée)", Buttons.Compact, Buttons.Look.Calm);
+            precedent.Margin = new Thickness(0, 0, 0, 2);
+            precedent.Click += delegate { NaviguerRecherche(-1); };
+            ligne.Children.Add(precedent);
+            Button suivant = Buttons.Icon("caret-right-bold", "Occurrence suivante (Entrée)", Buttons.Compact, Buttons.Look.Calm);
+            suivant.Margin = new Thickness(0, 0, 0, 2);
+            suivant.Click += delegate { NaviguerRecherche(1); };
+            ligne.Children.Add(suivant);
+            return ligne;
+        }
+
+        /// <summary>Le curseur dans le champ de recherche (Ctrl+F).</summary>
+        public void OuvrirRecherche()
+        {
+            _champRecherche.Focus();
+            _champRecherche.SelectAll();
+        }
+
+        private void ActualiserRecherche(bool aller)
+        {
+            string texte = _champRecherche.Text ?? "";
+            _resultats = _toile.Rechercher(texte);
+            _indiceResultat = 0;
+            _compteurRecherche.Text = _resultats.Count == 0 ? (texte.Trim().Length == 0 ? "" : "0") : "1/" + _resultats.Count;
+            if (aller && _resultats.Count > 0 && !_loading) _toile.AllerAuNoeud(_resultats[0]);
+        }
+
+        private void NaviguerRecherche(int sens)
+        {
+            if (_resultats.Count == 0) return;
+            _indiceResultat = (_indiceResultat + sens + _resultats.Count) % _resultats.Count;
+            _compteurRecherche.Text = (_indiceResultat + 1) + "/" + _resultats.Count;
+            _toile.AllerAuNoeud(_resultats[_indiceResultat]);
         }
 
         // ============================================================ liens vers Marabook : fiches, écrits, tuiles
@@ -561,24 +695,6 @@ namespace MentalO.Marabook
             }
         }
 
-        private async void OuvrirVersions()
-        {
-            byte[] octets = _derniersOctets;
-            if (octets == null || octets.Length == 0)
-            {
-                await _host.Message("Cette carte n'a pas encore été enregistrée : aucune version antérieure.", "Versions antérieures", MessageButtons.OK, MessageIcon.Information);
-                return;
-            }
-            DocumentCarte version = await DialogueVersions.Ouvrir(_host.MainWindow,
-                delegate { return Fichier.ListerVersions(octets); },
-                delegate(string nom) { return Fichier.ChargerVersion(octets, nom); });
-            if (version == null) return;
-            _toile.ChargerDocument(version);
-            _dirty = true;
-            Action handler = Changed;
-            if (handler != null) handler();
-        }
-
         private async void ImporterTexteAPuces()
         {
             string texte = await DialogueSaisie.DemanderTexteMultiligne(_host.MainWindow, "Importer un texte à puces",
@@ -645,7 +761,8 @@ namespace MentalO.Marabook
         {
             if (!_root.IsKeyboardFocusWithin) return;
             bool editing = Ui.Ancetre<TextBox>(e.Source, _root) != null;
-            if (e.KeyModifiers == KeyModifiers.Control)
+            bool recherche = editing && Ui.Ancetre<TextBox>(e.Source, _root) == _champRecherche;
+            if (e.KeyModifiers == KeyModifiers.Control && !recherche)
             {
                 if (e.Key == Key.K) { LierFiche(); e.Handled = true; return; }
                 if (e.Key == Key.L) { LierTexte(); e.Handled = true; return; }
@@ -672,7 +789,6 @@ namespace MentalO.Marabook
             if (e.Key == Key.Escape)
             {
                 if (_toile.FocusActif) _toile.AnnulerFocus();
-                else if (_panneaux.RechercheVisible) _panneaux.FermerRecherche();
                 else _toile.Deselectionner();
                 e.Handled = true;
                 return;
@@ -694,7 +810,7 @@ namespace MentalO.Marabook
                 case "retablir": _toile.Historique.Refaire(); return true;
                 case "copier": _toile.CopierSelection(); return true;
                 case "coller": Coller(); return true;
-                case "rechercher": _panneaux.OuvrirRecherche(); return true;
+                case "rechercher": OuvrirRecherche(); return true;
                 case "supprimer": _toile.SupprimerSelection(); return true;
                 case "grouper": _toile.GrouperSelection(); return true;
                 case "degrouper": _toile.DegrouperSelection(); return true;

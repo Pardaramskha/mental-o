@@ -56,7 +56,7 @@ namespace Mentalo.Modele
         public string LienCouleurDefaut { get; set; }
         public double LienEpaisseurDefaut { get; set; }
         public string LienTraitDefaut { get; set; }   // "plein" | "tirets" | "points"
-        public string LienFlecheDefaut { get; set; }  // "aucune" | "simple" | "double"
+        public string LienFlecheDefaut { get; set; }  // "aucune" | "simple" | "inverse" | "double"
         public string LienTraceDefaut { get; set; }   // "droit" | "courbe" | "equerre"
         public string GroupeCouleurDefaut { get; set; }
         public string GroupeTraitDefaut { get; set; } // "tirets" | "plein" | "points"

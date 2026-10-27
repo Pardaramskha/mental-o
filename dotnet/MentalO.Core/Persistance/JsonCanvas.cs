@@ -102,8 +102,8 @@ namespace Mentalo.Persistance
                 ed["id"] = l.Id;
                 ed["fromNode"] = l.SourceId;
                 ed["toNode"] = l.CibleId;
-                ed["fromEnd"] = l.Fleche == "double" ? "arrow" : "none";
-                ed["toEnd"] = l.Fleche == "simple" || l.Fleche == "double" ? "arrow" : "none";
+                ed["fromEnd"] = l.FlecheVersSource ? "arrow" : "none";
+                ed["toEnd"] = l.FlecheVersCible ? "arrow" : "none";
                 if (!string.IsNullOrEmpty(l.Couleur)) ed["color"] = l.Couleur;
                 if (!string.IsNullOrEmpty(l.Etiquette)) ed["label"] = l.Etiquette;
                 aretes.Add(ed);
@@ -230,16 +230,9 @@ namespace Mentalo.Persistance
                     bool flecheDepart = (Chaine(ed, "fromEnd") ?? "none") == "arrow";
                     bool flecheArrivee = (Chaine(ed, "toEnd") ?? "arrow") == "arrow";
                     Lien lien = new Lien();
-                    if (flecheDepart && !flecheArrivee)
-                    {
-                        // Une flèche qui ne pointe qu'au départ : on retourne le lien.
-                        lien.SourceId = cible; lien.CibleId = source; lien.Fleche = "simple";
-                    }
-                    else
-                    {
-                        lien.SourceId = source; lien.CibleId = cible;
-                        lien.Fleche = flecheDepart && flecheArrivee ? "double" : flecheArrivee ? "simple" : "aucune";
-                    }
+                    lien.SourceId = source; lien.CibleId = cible;
+                    // Une flèche qui ne pointe qu'au départ : « B vers A » (27/10/2026, plus de retournement du lien).
+                    lien.Fleche = flecheDepart && flecheArrivee ? "double" : flecheArrivee ? "simple" : flecheDepart ? "inverse" : "aucune";
                     string couleur = Couleur(Chaine(ed, "color"));
                     if (couleur != null) lien.Couleur = couleur;
                     lien.Etiquette = Chaine(ed, "label") ?? "";

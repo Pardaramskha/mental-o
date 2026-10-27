@@ -68,8 +68,8 @@ namespace Mentalo.Vue
             foreach (Noeud n in ensemble) parId[n.Id] = n;
             HashSet<string> aParent = new HashSet<string>();
             foreach (Lien l in Document.Liens)
-                if (l.Fleche == "simple" && ids.Contains(l.SourceId) && ids.Contains(l.CibleId) && l.SourceId != l.CibleId)
-                    aParent.Add(l.CibleId);
+                if (l.EstOriente && ids.Contains(l.SourceId) && ids.Contains(l.CibleId) && l.SourceId != l.CibleId)
+                    aParent.Add(l.IdAval);
 
             List<Noeud> ordonnes = new List<Noeud>(ensemble);
             ordonnes.Sort(delegate(Noeud a, Noeud b)
@@ -97,12 +97,12 @@ namespace Mentalo.Vue
             // D'abord les flèches qui partent d'ici, puis les liens sans sens.
             foreach (Lien l in Document.Liens)
             {
-                if (l.Fleche == "simple" && l.SourceId == noeud.Id && ids.Contains(l.CibleId) && !visites.Contains(l.CibleId))
-                    enfants.Add(parId[l.CibleId]);
+                if (l.EstOriente && l.IdAmont == noeud.Id && ids.Contains(l.IdAval) && !visites.Contains(l.IdAval))
+                    enfants.Add(parId[l.IdAval]);
             }
             foreach (Lien l in Document.Liens)
             {
-                if (l.Fleche == "simple") continue;
+                if (l.EstOriente) continue;
                 string autre = l.SourceId == noeud.Id ? l.CibleId : l.CibleId == noeud.Id ? l.SourceId : null;
                 if (autre == null || autre == noeud.Id || !ids.Contains(autre) || visites.Contains(autre)) continue;
                 if (!enfants.Contains(parId[autre])) enfants.Add(parId[autre]);

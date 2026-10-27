@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.LogicalTree;
 using Avalonia.Platform;
 using Avalonia.VisualTree;
 using Marabook.App;
@@ -124,6 +125,18 @@ namespace MentalO.Marabook
             return sommet == null || sommet.FocusManager == null ? null : sommet.FocusManager.GetFocusedElement();
         }
 
+        /// <summary>Les descendants LOGIQUES (un contrôle pas encore affiché n'a pas d'arbre visuel) qui répondent au critère.</summary>
+        private static int CompterDescendants(Control racine, Func<Control, bool> critere)
+        {
+            int n = 0;
+            foreach (ILogical logique in racine.GetLogicalDescendants())
+            {
+                Control controle = logique as Control;
+                if (controle != null && critere(controle)) n++;
+            }
+            return n;
+        }
+
         private static int CompterVisibles(Control racine, Func<Control, bool> critere)
         {
             int n = 0;
@@ -147,7 +160,7 @@ namespace MentalO.Marabook
             };
             Action ecrire = delegate { try { File.WriteAllText(chemin, log.ToString()); } catch { } };
             // Chien de garde : quoi qu'il arrive, Marabook quitte.
-            Task.Run(async delegate { await Task.Delay(40000); log.AppendLine("KO  chien de garde : la sonde n'a pas fini"); ecrire(); Environment.Exit(3); });
+            Task.Run(async delegate { await Task.Delay(55000); log.AppendLine("KO  chien de garde : la sonde n'a pas fini"); ecrire(); Environment.Exit(3); });
             try
             {
                 await Task.Delay(800);
@@ -279,6 +292,54 @@ namespace MentalO.Marabook
                 }
                 catch (Exception error) { verifier(false, "photo de la fenêtre : " + error.Message); }
 
+                // Le rail (27/10) : note et étiquettes actives pour une boîte, les sections titrées et séparées par des filets.
+                verifier(_note.IsEnabled && _etiquettes.IsEnabled && _note.IsEffectivelyVisible, "une boîte sélectionnée : Note et Étiquettes sont actifs sous la section Boîte");
+                verifier(CompterVisibles(_inspecteur, delegate(Control c) { return c is Border && Equals(c.Tag, "filet-inspecteur"); }) >= 3, "les sections Boîte et Texte sont séparées par des filets (et un filet clôt l'inspecteur)");
+                verifier(!_grouper.IsEffectivelyVisible, "une seule boîte : pas de « Grouper »");
+                verifier(CompterVisibles(_inspecteur, delegate(Control c) { TextBlock t = c as TextBlock; return t != null && t.FontWeight == Avalonia.Media.FontWeight.SemiBold && (t.Text == "Boîte" || t.Text == "Texte"); }) == 2, "les titres Boîte et Texte sont en demi-gras");
+
+                // Sélection multiple : le compte et « Grouper » avant la Boîte.
+                _toile.SelectionnerTout();
+                await Task.Delay(300);
+                verifier(_toile.NbSelectionnes == 5, "tout sélectionner : 5 boîtes");
+                verifier(_grouper.IsEffectivelyVisible && _grouper.IsEnabled, "sélection multiple : « Grouper » se montre et s'active");
+                verifier(CompterVisibles(_inspecteur, delegate(Control c) { TextBlock t = c as TextBlock; return t != null && t.Text == "5 éléments sélectionnés"; }) == 1, "le rail dit « 5 éléments sélectionnés »");
+
+                // Un groupe : son compte, Dégrouper (orangé) et Plier / Déplier avant ses réglages.
+                Groupe actes = _toile.Document.Groupes[0];
+                _toile.SelectionnerGroupe(actes);
+                await Task.Delay(300);
+                verifier(_degrouper.IsEffectivelyVisible && _degrouper.IsEnabled && !_grouper.IsEffectivelyVisible, "groupe sélectionné : « Dégrouper » se montre, « Grouper » non");
+                verifier(_plier.IsEffectivelyVisible && !_deplier.IsEffectivelyVisible, "groupe déplié : le bouton propose de plier");
+                verifier(CompterVisibles(_inspecteur, delegate(Control c) { TextBlock t = c as TextBlock; return t != null && t.Text == "Groupe de 3 éléments"; }) == 1, "le rail dit « Groupe de 3 éléments »");
+                _toile.BasculerPliageCible();
+                await Task.Delay(300);
+                verifier(actes.Plie && _deplier.IsEffectivelyVisible && !_plier.IsEffectivelyVisible, "plié : le bouton propose de déplier");
+                _toile.BasculerPliageCible();
+                await Task.Delay(200);
+                verifier(!actes.Plie, "déplié de nouveau");
+
+                // La recherche dans la barre des menus : Ctrl+F (le geste) y amène le curseur, taper va à la boîte.
+                Executer("rechercher", false);
+                await Task.Delay(200);
+                verifier(ReferenceEquals(FocusActuel(), _champRecherche), "« rechercher » met le curseur dans le champ de la barre des menus");
+                _champRecherche.Text = "Keira";
+                await Task.Delay(300);
+                verifier(_compteurRecherche.Text == "1/1" && _toile.NoeudSelectionne != null && _toile.NoeudSelectionne.TextePlat.StartsWith("Keira"), "taper « Keira » compte 1/1 et sélectionne la boîte");
+                _champRecherche.Text = "";
+                _toile.Focus();
+
+                // La vignette d'une tuile prend toute la largeur demandée.
+                Control vignette = Vignette.Dessiner(tea, 192, 96);
+                verifier(vignette != null && vignette.Width == 192 && vignette.HorizontalAlignment == Avalonia.Layout.HorizontalAlignment.Stretch, "la vignette fait la largeur demandée (192) et s'étire");
+
+                // L'onglet des Préférences : aux formes de Marabook (filets, pas d'onglets dans l'onglet), les raccourcis listés.
+                Control onglet = new PreferencesTab(_host).Build();
+                onglet.Measure(new Size(700, 600));
+                verifier(onglet is ScrollViewer && CompterDescendants(onglet, delegate(Control c) { return c is TabControl; }) == 0, "l'onglet Mental-O n'a plus d'onglets imbriqués");
+                verifier(CompterDescendants(onglet, delegate(Control c) { return c is Border && Equals(c.Tag, "caption-divider"); }) == 2, "deux filets d'intertitre (Apparence, Raccourcis)");
+                verifier(CompterDescendants(onglet, delegate(Control c) { return c is TextBox; }) >= 15, "les raccourcis de la toile sont listés");
+
                 // Thème de carte : la couleur du texte des boîtes existantes suit.
                 string ancienne = _toile.Document.CouleurParDefaut;
                 ThemeCarte ardoise = ThemeCarte.Liste()[1];
@@ -288,6 +349,25 @@ namespace MentalO.Marabook
                 foreach (Noeud n in _toile.Document.Noeuds)
                     foreach (Segment seg in n.Segments) { segments++; if (string.Equals(seg.Couleur, ardoise.CouleurTexte, StringComparison.OrdinalIgnoreCase)) recolores++; }
                 verifier(segments > 0 && recolores == segments, "thème Ardoise : tout le texte passe de " + ancienne + " à " + ardoise.CouleurTexte + " (" + recolores + "/" + segments + ")");
+
+                // Ardoise : éditer une boîte ne doit pas ouvrir un champ blanc (le cadre du gabarit reste transparent).
+                _toile.AllerAuNoeud(premier);
+                await Task.Delay(200);
+                _toile.EditerSelection();
+                await Task.Delay(500);
+                TextBox editeurArdoise = FocusActuel() as TextBox;
+                int opaques = 0, cadres = 0;
+                if (editeurArdoise != null)
+                    foreach (Visual v in editeurArdoise.GetVisualDescendants())
+                    {
+                        Border cadre = v as Border;
+                        if (cadre == null) continue;
+                        cadres++;
+                        Avalonia.Media.ISolidColorBrush fondCadre = cadre.Background as Avalonia.Media.ISolidColorBrush;
+                        if (fondCadre != null && fondCadre.Color.A > 0) opaques++;
+                    }
+                verifier(editeurArdoise != null && cadres > 0 && opaques == 0, "thème Ardoise : le champ d'édition reste transparent (" + opaques + " cadre(s) opaque(s) sur " + cadres + ")");
+                _toile.ValiderEditionEnCours();
             }
             catch (Exception error) { echecs++; log.AppendLine("KO  exception : " + error); }
             log.AppendLine(echecs == 0 ? "SONDE DLC OK (" + verifications + " vérifications)" : "SONDE DLC KO (" + echecs + " échec(s) sur " + verifications + ")");

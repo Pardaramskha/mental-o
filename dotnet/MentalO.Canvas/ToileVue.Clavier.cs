@@ -13,23 +13,23 @@ namespace Mentalo.Vue
         private const double EcartSoeur = 24;
         private const double EcartEnfant = 60;
 
-        /// <summary>Le parent d'une boîte : la source d'une flèche simple qui arrive dessus.</summary>
+        /// <summary>Le parent d'une boîte : d'où part la flèche à sens unique qui arrive dessus.</summary>
         private Noeud ParentDe(Noeud noeud)
         {
             foreach (Lien lien in Document.Liens)
-                if (lien.Fleche == "simple" && lien.CibleId == noeud.Id)
-                    return Document.TrouverNoeud(lien.SourceId);
+                if (lien.EstOriente && lien.IdAval == noeud.Id)
+                    return Document.TrouverNoeud(lien.IdAmont);
             return null;
         }
 
-        /// <summary>Les enfants d'une boîte : les cibles des flèches simples qui en partent.</summary>
+        /// <summary>Les enfants d'une boîte : où arrivent les flèches à sens unique qui en partent.</summary>
         private List<Noeud> EnfantsDe(Noeud noeud)
         {
             List<Noeud> enfants = new List<Noeud>();
             foreach (Lien lien in Document.Liens)
             {
-                if (lien.Fleche != "simple" || lien.SourceId != noeud.Id) continue;
-                Noeud cible = Document.TrouverNoeud(lien.CibleId);
+                if (!lien.EstOriente || lien.IdAmont != noeud.Id) continue;
+                Noeud cible = Document.TrouverNoeud(lien.IdAval);
                 if (cible != null) enfants.Add(cible);
             }
             return enfants;

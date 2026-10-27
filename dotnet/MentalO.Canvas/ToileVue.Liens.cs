@@ -49,7 +49,8 @@ namespace Mentalo.Vue
 
             MenuItem fleche = Ui.SousMenu("Flèche");
             AjouterChoixFleche(fleche, lien, "Aucune", "aucune");
-            AjouterChoixFleche(fleche, lien, "Vers la cible", "simple");
+            AjouterChoixFleche(fleche, lien, "A vers B", "simple");
+            AjouterChoixFleche(fleche, lien, "B vers A", "inverse");
             AjouterChoixFleche(fleche, lien, "Dans les deux sens", "double");
             menu.Items.Add(fleche);
 
@@ -155,6 +156,7 @@ namespace Mentalo.Vue
             second.Courbure = lien.Courbure / 2;
             second.Etiquette = ""; // l'étiquette reste sur le premier tronçon
             if (lien.Fleche == "simple") premier.Fleche = "aucune"; // la flèche file vers la cible
+            else if (lien.Fleche == "inverse") second.Fleche = "aucune"; // …ou vers la source (B vers A)
 
             List<ICommande> commandes = new List<ICommande>();
             commandes.Add(new CommandeSupprimerLien(this, lien));

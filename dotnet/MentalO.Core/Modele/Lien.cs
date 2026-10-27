@@ -11,8 +11,23 @@ namespace Mentalo.Modele
         public string Couleur { get; set; }    // "#RRGGBB"
         public double Epaisseur { get; set; }
         public string Trait { get; set; }      // "plein" | "tirets" | "points"
-        public string Fleche { get; set; }     // "aucune" | "simple" (vers la cible) | "double"
+        public string Fleche { get; set; }     // "aucune" | "simple" (A vers B : pointe sur la cible) | "inverse" (B vers A : pointe sur la source, 27/10/2026) | "double"
         public string Trace { get; set; }      // "droit" | "courbe" | "equerre"
+
+        /// <summary>Une pointe sur la boîte d'arrivée (cible).</summary>
+        public bool FlecheVersCible { get { return Fleche == "simple" || Fleche == "double"; } }
+
+        /// <summary>Une pointe sur la boîte de départ (source).</summary>
+        public bool FlecheVersSource { get { return Fleche == "inverse" || Fleche == "double"; } }
+
+        /// <summary>Un sens unique (une seule pointe) : le lien dit qui est le parent.</summary>
+        public bool EstOriente { get { return Fleche == "simple" || Fleche == "inverse"; } }
+
+        /// <summary>D'où part une flèche à sens unique (le parent), ou null.</summary>
+        public string IdAmont { get { return Fleche == "simple" ? SourceId : Fleche == "inverse" ? CibleId : null; } }
+
+        /// <summary>Où arrive une flèche à sens unique (l'enfant), ou null.</summary>
+        public string IdAval { get { return Fleche == "simple" ? CibleId : Fleche == "inverse" ? SourceId : null; } }
 
         /// <summary>Bombé du tracé courbe : distance signée du point de contrôle à la
         /// médiatrice du segment (0 = droit). Réglée par la poignée de courbure.</summary>

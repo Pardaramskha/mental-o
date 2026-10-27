@@ -131,8 +131,8 @@ namespace Mentalo.Vue
             dirArrivee = dirArrivee.Normalize();
 
             double taille = 6 + lien.Epaisseur * 2.2;
-            bool versCible = lien.Fleche == "simple" || lien.Fleche == "double";
-            bool versSource = lien.Fleche == "double";
+            bool versCible = lien.FlecheVersCible;
+            bool versSource = lien.FlecheVersSource;
             Point debut = versSource ? a + dirDepart * (taille * 0.8) : a;
             Point fin = versCible ? b - dirArrivee * (taille * 0.8) : b;
 
@@ -171,8 +171,8 @@ namespace Mentalo.Vue
             }
 
             double taille = 6 + Modele.Epaisseur * 2.2;
-            bool versCible = Modele.Fleche == "simple" || Modele.Fleche == "double";
-            bool versSource = Modele.Fleche == "double";
+            bool versCible = Modele.FlecheVersCible;
+            bool versSource = Modele.FlecheVersSource;
             Vector dirDepart, dirArrivee;
             PathGeometry geometrie = Trace(_a, _b, Modele, out dirDepart, out dirArrivee);
             _ligne.Data = geometrie;

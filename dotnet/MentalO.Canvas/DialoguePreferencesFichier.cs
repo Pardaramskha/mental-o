@@ -14,6 +14,10 @@ namespace Mentalo.Vue
     /// <summary>Fichier > Préférences de fichier : réglages propres à la carte ouverte.</summary>
     public static class DialoguePreferencesFichier
     {
+        /// <summary>Faux chez un hôte qui enregistre lui-même (Marabook et son .plot,
+        /// 27/10/2026) : la case « Enregistrer automatiquement » n'y a pas de sens.</summary>
+        public static bool AvecSauvegardeAuto = true;
+
         /// <summary>Affiche le dialogue ; renvoie vrai si des préférences ont été appliquées.
         /// Les rectangles servent à la miniature de l'onglet Général.</summary>
         public static async Task<bool> Afficher(Window proprietaire, DocumentCarte document, List<Rect> rectangles)
@@ -37,7 +41,7 @@ namespace Mentalo.Vue
                 IsChecked = document.SauvegardeAuto,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            Dialogue.AjouterLigne(general, 2, "", sauvegardeAuto);
+            if (AvecSauvegardeAuto) Dialogue.AjouterLigne(general, 2, "", sauvegardeAuto);
             int nbImages = 0;
             foreach (Noeud n in document.Noeuds)
                 if (n.EstImage) nbImages++;
@@ -203,7 +207,7 @@ namespace Mentalo.Vue
                 document.LienTraitDefaut);
             Dialogue.AjouterLigne(liensGrille, 2, "Trait :", traitLien);
             ComboBox flecheLien = ComboChoix(new string[,]
-                { { "Sans flèche", "aucune" }, { "Vers la cible", "simple" }, { "Les deux sens", "double" } },
+                { { "Sans flèche", "aucune" }, { "A vers B", "simple" }, { "B vers A", "inverse" }, { "Les deux sens", "double" } },
                 document.LienFlecheDefaut);
             Dialogue.AjouterLigne(liensGrille, 3, "Flèches :", flecheLien);
             ComboBox traceLien = ComboChoix(new string[,]
@@ -241,7 +245,7 @@ namespace Mentalo.Vue
 
             document.NomAffichage = (nom.Text ?? "").Trim();
             document.Auteur = (auteur.Text ?? "").Trim();
-            document.SauvegardeAuto = sauvegardeAuto.IsChecked == true;
+            if (AvecSauvegardeAuto) document.SauvegardeAuto = sauvegardeAuto.IsChecked == true;
             string choixFond = TagChaine(fond);
             if (choixFond != null) document.FondCouleur = choixFond;
             string choixMotif = TagChaine(motif);

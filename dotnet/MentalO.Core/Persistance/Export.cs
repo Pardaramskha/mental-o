@@ -148,9 +148,9 @@ namespace Mentalo.Persistance
                 cheminTrace, couleur, Nombre(lien.Epaisseur), TiretsSvg(lien.Trait, lien.Epaisseur)));
 
             double taille = 6 + lien.Epaisseur * 2.2;
-            if (lien.Fleche == "simple" || lien.Fleche == "double")
+            if (lien.FlecheVersCible)
                 EcrireFlecheSvg(svg, b, dirArrivee, taille, couleur);
-            if (lien.Fleche == "double")
+            if (lien.FlecheVersSource)
                 EcrireFlecheSvg(svg, a, -dirDepart, taille, couleur);
 
             if (!string.IsNullOrEmpty(lien.Etiquette))
@@ -328,7 +328,7 @@ namespace Mentalo.Persistance
                 if (!parId.ContainsKey(lien.SourceId) || !parId.ContainsKey(lien.CibleId)) continue;
                 voisins[lien.SourceId].Add(lien);
                 voisins[lien.CibleId].Add(lien);
-                if (lien.Fleche == "simple") entrants[lien.CibleId]++;
+                if (lien.EstOriente) entrants[lien.IdAval]++;
             }
 
             List<Branche> foret = new List<Branche>();
@@ -348,8 +348,8 @@ namespace Mentalo.Persistance
             Branche branche = new Branche { Noeud = noeud, LienArrivee = lienArrivee };
             foreach (Lien lien in voisins[noeud.Id])
             {
-                // Une flèche simple ne se descend que dans son sens.
-                if (lien.Fleche == "simple" && lien.CibleId == noeud.Id) continue;
+                // Une flèche à sens unique ne se descend que dans son sens.
+                if (lien.EstOriente && lien.IdAval == noeud.Id) continue;
                 string autreId = lien.SourceId == noeud.Id ? lien.CibleId : lien.SourceId;
                 Noeud autre;
                 if (!parId.TryGetValue(autreId, out autre) || visites.Contains(autreId)) continue;

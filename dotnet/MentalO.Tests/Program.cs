@@ -31,6 +31,7 @@ namespace Mentalo.Tests
             Tester("export markdown et import puces", Exports);
             Tester("gestes : interprétation et correspondance", Gestes);
             Tester("json canvas aller-retour", CanvasAllerRetour);
+            Tester("flèches : A vers B, B vers A, les deux sens", Fleches);
             Console.WriteLine();
             Console.WriteLine(_total + " test(s), " + _echecs + " échec(s)");
             return _echecs;
@@ -280,6 +281,46 @@ namespace Mentalo.Tests
             Verifier(noeuds[1].FondCouleur == "#C0392B", "couleur préréglée 1");
             Verifier(liens[0].Fleche == "simple" && liens[0].Etiquette == "vers", "arête");
             Verifier(groupes[0].NoeudIds.Count == 1 && groupes[0].NoeudIds[0] == noeuds[0].Id, "appartenance par géométrie");
+        }
+
+        /// <summary>« inverse » (27/10/2026) : la pointe sur la boîte de départ — le
+        /// parent est alors la cible. Les aides du modèle, l'import JSON Canvas
+        /// (une flèche au départ seul ne retourne plus le lien) et l'arbre des
+        /// exports le respectent.</summary>
+        private static void Fleches()
+        {
+            Lien simple = new Lien { SourceId = "a", CibleId = "b", Fleche = "simple" };
+            Verifier(simple.FlecheVersCible && !simple.FlecheVersSource && simple.EstOriente && simple.IdAmont == "a" && simple.IdAval == "b", "simple = A vers B");
+            Lien inverse = new Lien { SourceId = "a", CibleId = "b", Fleche = "inverse" };
+            Verifier(!inverse.FlecheVersCible && inverse.FlecheVersSource && inverse.EstOriente && inverse.IdAmont == "b" && inverse.IdAval == "a", "inverse = B vers A");
+            Lien dbl = new Lien { SourceId = "a", CibleId = "b", Fleche = "double" };
+            Verifier(dbl.FlecheVersCible && dbl.FlecheVersSource && !dbl.EstOriente && dbl.IdAmont == null, "double : les deux pointes, pas de parent");
+            Lien aucune = new Lien { SourceId = "a", CibleId = "b" };
+            Verifier(!aucune.FlecheVersCible && !aucune.FlecheVersSource && !aucune.EstOriente, "aucune");
+
+            string dossier = Path.Combine(Path.GetTempPath(), "mentalo-tests");
+            Directory.CreateDirectory(dossier);
+            string chemin = Path.Combine(dossier, "inverse.canvas");
+            File.WriteAllText(chemin, "{\"nodes\":[{\"id\":\"a\",\"type\":\"text\",\"text\":\"Alpha\",\"x\":0,\"y\":0,\"width\":120,\"height\":40},"
+                + "{\"id\":\"b\",\"type\":\"text\",\"text\":\"Beta\",\"x\":200,\"y\":0,\"width\":120,\"height\":40}],"
+                + "\"edges\":[{\"id\":\"e\",\"fromNode\":\"a\",\"toNode\":\"b\",\"fromEnd\":\"arrow\",\"toEnd\":\"none\"}]}");
+            List<Noeud> noeuds; List<Lien> liens; List<Groupe> groupes;
+            JsonCanvas.Importer(chemin, out noeuds, out liens, out groupes);
+            Verifier(liens.Count == 1 && liens[0].Fleche == "inverse" && liens[0].SourceId == noeuds[0].Id && liens[0].CibleId == noeuds[1].Id,
+                "import canvas : une pointe au départ seul = B vers A, lien non retourné");
+
+            // L'arbre des exports descend dans le sens de la pointe : Beta (cible) est la racine, Alpha son enfant.
+            DocumentCarte document = new DocumentCarte();
+            Noeud alpha = new Noeud(); alpha.DefinirTexteSimple("Alpha"); alpha.X = 0; alpha.Y = 100;
+            Noeud beta = new Noeud(); beta.DefinirTexteSimple("Beta"); beta.X = 300; beta.Y = 100;
+            document.Noeuds.Add(alpha); document.Noeuds.Add(beta);
+            Lien lien = document.NouveauLien();
+            lien.SourceId = alpha.Id; lien.CibleId = beta.Id; lien.Fleche = "inverse";
+            document.Liens.Add(lien);
+            string md = Path.Combine(dossier, "inverse.md");
+            Export.ExporterMarkdown(document, "inverse", md);
+            string texte = File.ReadAllText(md);
+            Verifier(texte.IndexOf("Beta") >= 0 && texte.IndexOf("Alpha") > texte.IndexOf("Beta"), "export markdown : la racine est la boîte pointée (Beta), Alpha dessous");
         }
     }
 }

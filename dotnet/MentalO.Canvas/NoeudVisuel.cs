@@ -8,6 +8,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Mentalo.Modele;
@@ -201,6 +202,24 @@ namespace Mentalo.Vue
             editeur.MinWidth = 80;
             editeur.BorderThickness = new Thickness(0);
             editeur.Background = Brushes.Transparent;
+            // Le gabarit du TextBox repeint SON cadre au survol et au clavier (le
+            // thème Fluent comme celui de Marabook : fond de champ blanc) — sur une
+            // boîte sombre (thème Ardoise), le texte clair disparaissait dans un
+            // rectangle blanc (27/10/2026). Ces styles, posés sur le contrôle, passent
+            // après ceux de l'application : le cadre du gabarit reste transparent.
+            foreach (string etat in new string[] { null, ":pointerover", ":focus", ":focus-within" })
+            {
+                string classe = etat;
+                Style style = new Style(delegate(Selector x)
+                {
+                    Selector s = x.OfType<TextBox>();
+                    if (classe != null) s = s.Class(classe);
+                    return s.Template().OfType<Border>();
+                });
+                style.Setters.Add(new Setter(Border.BackgroundProperty, Brushes.Transparent));
+                style.Setters.Add(new Setter(Border.BorderBrushProperty, Brushes.Transparent));
+                editeur.Styles.Add(style);
+            }
             editeur.Padding = new Thickness(0);
             editeur.AcceptsReturn = true;
             editeur.AcceptsTab = false;
