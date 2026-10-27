@@ -277,27 +277,30 @@ namespace MentalO.Marabook
         {
             ExtrasInspecteur extras = new ExtrasInspecteur();
 
+            // Les petits carrés sont encadrés comme ceux du ruban de l'éditeur de texte ;
+            // Note, Étiquettes, Grouper et Dégrouper sont de GRANDS carrés, icône et
+            // libellé dessous, comme les grands boutons du ruban (27/10, Rémi).
             WrapPanel texte = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
-            texte.Children.Add(Bouton("fiche-individual", null, "Lien vers une fiche (" + global::Marabook.App.Ui.Keys("Ctrl+K") + ") : la fiche choisie se pose en lien dans la boîte sélectionnée", Buttons.Look.Calm, delegate { LierFiche(); }));
-            texte.Children.Add(Bouton("document", null, "Lien vers un écrit (" + global::Marabook.App.Ui.Keys("Ctrl+L") + ") : l'écrit choisi se pose en lien dans la boîte sélectionnée", Buttons.Look.Calm, delegate { LierTexte(); }));
-            texte.Children.Add(Bouton("tuile", null, "Insérer une tuile : n'importe quel élément du projet, montré comme sur son tableau (clic droit sur la tuile : normal ou condensé)", Buttons.Look.Calm, delegate { InsererTuile(); }));
+            texte.Children.Add(Bouton("fiche-individual", null, "Lien vers une fiche (" + global::Marabook.App.Ui.Keys("Ctrl+K") + ") : la fiche choisie se pose en lien dans la boîte sélectionnée", Buttons.Look.Outline, delegate { LierFiche(); }));
+            texte.Children.Add(Bouton("document", null, "Lien vers un écrit (" + global::Marabook.App.Ui.Keys("Ctrl+L") + ") : l'écrit choisi se pose en lien dans la boîte sélectionnée", Buttons.Look.Outline, delegate { LierTexte(); }));
+            texte.Children.Add(Bouton("tuile", null, "Insérer une tuile : n'importe quel élément du projet, montré comme sur son tableau (clic droit sur la tuile : normal ou condensé)", Buttons.Look.Outline, delegate { InsererTuile(); }));
             extras.Texte = texte;
 
             WrapPanel boite = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
-            _note = Bouton("document", null, "Note de la boîte (" + Geste("note") + ") : un détail hors de la carte — une icône dans le coin, la note en infobulle", Buttons.Look.Outline, delegate { _toile.EditerNoteSelection(); });
+            _note = BoutonGrand("document", "Note", "Note de la boîte (" + Geste("note") + ") : un détail hors de la carte — une icône dans le coin, la note en infobulle", delegate { _toile.EditerNoteSelection(); });
             boite.Children.Add(_note);
-            _etiquettes = Bouton("tag", null, "Étiquettes de la boîte : cocher celles qu'elle porte, en créer, les gérer", Buttons.Look.Outline, delegate { });
+            _etiquettes = BoutonGrand("tag", "Étiquettes", "Étiquettes de la boîte : cocher celles qu'elle porte, en créer, les gérer", delegate { });
             AttacherMenu(_etiquettes, MenuEtiquettes);
             boite.Children.Add(_etiquettes);
             extras.Boite = boite;
 
             WrapPanel selection = new WrapPanel { Orientation = Orientation.Horizontal };
-            _grouper = Bouton("group", null, "Grouper les boîtes sélectionnées : elles se déplacent d'un bloc, dans un cadre (" + Geste("grouper") + ")", Buttons.Look.Outline, delegate { _toile.GrouperSelection(); });
+            _grouper = BoutonGrand("group", "Grouper", "Grouper les boîtes sélectionnées : elles se déplacent d'un bloc, dans un cadre (" + Geste("grouper") + ")", delegate { _toile.GrouperSelection(); });
             selection.Children.Add(_grouper);
             extras.Selection = selection;
 
             WrapPanel groupe = new WrapPanel { Orientation = Orientation.Horizontal };
-            _degrouper = Bouton("group", null, "Dégrouper : dissoudre le groupe (" + Geste("degrouper") + ")", Buttons.Look.Outline, delegate { _toile.DegrouperSelection(); });
+            _degrouper = BoutonGrand("group", "Dégrouper", "Dégrouper : dissoudre le groupe (" + Geste("degrouper") + ")", delegate { _toile.DegrouperSelection(); });
             TeinterDegrouper();
             groupe.Children.Add(_degrouper);
             _plier = Bouton("fold", null, "Plier le groupe : ses boîtes se cachent derrière une pastille-titre (" + Geste("plier") + ")", Buttons.Look.Outline, delegate { _toile.BasculerPliageCible(); });
@@ -328,6 +331,16 @@ namespace MentalO.Marabook
             Button button = label == null
                 ? Buttons.Icon(icon, tooltip, Buttons.Compact, look)
                 : Buttons.IconText(icon, label, tooltip, Buttons.Compact, look);
+            button.Margin = new Thickness(0, 0, 4, 2);
+            button.Click += delegate { onClick(); if (!_toile.EditionEnCours) _toile.Focus(); };
+            return button;
+        }
+
+        /// <summary>Un grand carré du rail : icône et libellé dessous, à la taille des
+        /// grands boutons du ruban de l'éditeur de texte (56 px), encadré.</summary>
+        private Button BoutonGrand(string icon, string label, string tooltip, Action onClick)
+        {
+            Button button = Buttons.Big(icon, label, tooltip, EditorView.RibbonHeight, Buttons.Look.Outline);
             button.Margin = new Thickness(0, 0, 4, 2);
             button.Click += delegate { onClick(); if (!_toile.EditionEnCours) _toile.Focus(); };
             return button;

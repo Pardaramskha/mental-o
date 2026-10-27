@@ -28,7 +28,9 @@ namespace MentalO.Marabook
             return new Border { Width = 1, Height = 22, Margin = new Thickness(6, 0, 8, 0), Background = Chrome.Border, VerticalAlignment = VerticalAlignment.Center };
         }
 
-        private static void Habiller(TemplatedControl bouton, string infobulle)
+        /// <param name="calme">Sans cadre au repos (les onglets à texte) ; les carrés
+        /// d'icône sont ENCADRÉS comme ceux du ruban de l'éditeur de texte (27/10, Rémi).</param>
+        private static void Habiller(TemplatedControl bouton, string infobulle, bool calme)
         {
             bouton.Height = global::Marabook.App.Buttons.Compact;
             bouton.MinHeight = global::Marabook.App.Buttons.Compact;
@@ -37,7 +39,7 @@ namespace MentalO.Marabook
             bouton.VerticalAlignment = VerticalAlignment.Center;
             bouton.Margin = new Thickness(0, 0, 3, 0);
             if (!bouton.Classes.Contains(global::Marabook.App.Theme.Owned)) bouton.Classes.Add(global::Marabook.App.Theme.Owned);
-            bouton.Classes.Add(global::Marabook.App.Theme.Calm);
+            if (calme) bouton.Classes.Add(global::Marabook.App.Theme.Calm);
             if (!string.IsNullOrEmpty(infobulle)) ToolTip.SetTip(bouton, infobulle);
         }
 
@@ -46,7 +48,7 @@ namespace MentalO.Marabook
             contenu.HorizontalAlignment = HorizontalAlignment.Center;
             contenu.VerticalAlignment = VerticalAlignment.Center;
             ToggleButton bouton = new ToggleButton { Content = contenu, Padding = new Thickness(0), Width = global::Marabook.App.Buttons.Compact };
-            Habiller(bouton, infobulle);
+            Habiller(bouton, infobulle, false);
             return bouton;
         }
 
@@ -61,7 +63,7 @@ namespace MentalO.Marabook
             }
             ligne.Children.Add(new TextBlock { Text = texte, VerticalAlignment = VerticalAlignment.Center });
             ToggleButton bouton = new ToggleButton { Content = ligne, Padding = new Thickness(8, 0, 10, 0) };
-            Habiller(bouton, infobulle);
+            Habiller(bouton, infobulle, true);
             return bouton;
         }
 
@@ -70,7 +72,7 @@ namespace MentalO.Marabook
             contenu.HorizontalAlignment = HorizontalAlignment.Center;
             contenu.VerticalAlignment = VerticalAlignment.Center;
             Button bouton = new Button { Content = contenu, Padding = new Thickness(0), Width = global::Marabook.App.Buttons.Compact };
-            Habiller(bouton, infobulle);
+            Habiller(bouton, infobulle, false);
             return bouton;
         }
 
