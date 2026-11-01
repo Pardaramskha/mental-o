@@ -1,0 +1,156 @@
+# Release automatique de Mental-O (Avalonia, .NET 8 — trois systèmes),
+# sur le modèle de Marabook (26/10/2026).
+#
+# Déclenchée à chaque poussée sur main (publication) et sur toute autre
+# branche (essai à blanc : compile, teste et fabrique sans rien publier),
+# ou à la main (Actions > Release > Run workflow, « dry_run » décoché pour
+# publier depuis main).
+#
+#   1. lit VERSION (à incrémenter AVANT de fusionner : si le tag vVERSION
+#      existe déjà, le workflow échoue plutôt que d'écraser)
+#   2. sur Windows, Ubuntu et macOS : compile, lance les tests du cœur
+#      (MentalOTests), fabrique l'archive portable du système
+#      (dotnet/publish.ps1) ; sur Windows, bâtit aussi le DLC Marabook
+#      (dotnet/build-dlc.ps1) contre le dépôt Marabook (main) cloné à côté
+#   3. crée la release vVERSION avec les assets à noms STABLES (l'Updater
+#      de Mental-O et le magasin de DLC de Marabook pointent
+#      releases/latest) ; le texte de la release est patchnotes/VERSION.md
+#      s'il existe, sinon le titre seul :
+#        mental-o-windows-portable.zip
+#        mental-o-linux-portable.zip
+#        mental-o-macos-portable.zip      mental-o-macos-arm64-portable.zip
+#        mental-o.mdlc                    (le DLC de Marabook)
+#   4. ne garde que les 3 releases les plus récentes.
+
+name: Release
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Essai à blanc (rien n'est publié)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+      publish: ${{ steps.read.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: read
+        shell: bash
+        run: |
+          version=$(tr -d '[:space:]' < VERSION)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          publish=false
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            if [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event.inputs.dry_run }}" = "false" ]; then publish=true; fi
+          fi
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          if [ "$publish" = "true" ] && git ls-remote --tags origin "refs/tags/v$version" | grep -q .; then
+            echo "Le tag v$version existe déjà : incrémentez VERSION avant de fusionner." >&2
+            exit 1
+          fi
+
+  build:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            asset: mental-o-windows-portable.zip
+          - os: ubuntu-latest
+            rid: linux-x64
+            asset: mental-o-linux-portable.zip
+          - os: macos-latest
+            rid: osx-arm64
+            asset: mental-o-macos-arm64-portable.zip
+          # macOS Intel publié depuis le runner ARM (1/11) : « macos-13 » n'existe
+          # plus chez GitHub (le job attendait un runner 24 h puis tombait) ;
+          # dotnet publish -r osx-x64 se fait très bien depuis macos-latest.
+          - os: macos-latest
+            rid: osx-x64
+            asset: mental-o-macos-portable.zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: mental-o
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Tests du cœur
+        shell: pwsh
+        working-directory: mental-o
+        run: |
+          dotnet build dotnet/MentalO.Tests/MentalO.Tests.csproj -c Release --nologo
+          dotnet dotnet/MentalO.Tests/bin/Release/net8.0/MentalOTests.dll
+      - name: Archive portable
+        shell: pwsh
+        working-directory: mental-o
+        run: pwsh dotnet/publish.ps1 -Rid ${{ matrix.rid }}
+      - name: Marabook (pour compiler le DLC)
+        if: matrix.rid == 'win-x64'
+        uses: actions/checkout@v4
+        with:
+          repository: Pardaramskha/marabook
+          # La branche de Marabook qui porte le contrat des modules (1/11) :
+          # la variable de dépôt MARABOOK_REF (Settings > Variables), sinon
+          # main. Tant que la 1.1.0 n'est pas sortie, MARABOOK_REF = feat/1.1.0.
+          ref: ${{ vars.MARABOOK_REF || 'main' }}
+          path: marabook
+      - name: DLC Marabook (mental-o.mdlc)
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        working-directory: mental-o
+        run: |
+          dotnet build ../marabook/dotnet/Marabook.App/Marabook.App.csproj -c Release --nologo -v q
+          pwsh dotnet/build-dlc.ps1 -Out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: mental-o/dist/${{ matrix.asset }}
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: matrix.rid == 'win-x64'
+        with:
+          name: mental-o.mdlc
+          path: mental-o/dist/mental-o.mdlc
+          if-no-files-found: error
+
+  release:
+    needs: [version, build]
+    if: needs.version.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Notes de version
+        shell: bash
+        run: |
+          notes="patchnotes/${{ needs.version.outputs.version }}.md"
+          if [ -f "$notes" ]; then cp "$notes" notes.md; else echo "Mental-O ${{ needs.version.outputs.version }}" > notes.md; fi
+      - name: Publier
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          v="${{ needs.version.outputs.version }}"
+          gh release create "v$v" --title "Mental-O $v" --notes-file notes.md assets/*
+          # Ne garder que les 3 releases les plus récentes.
+          gh release list --limit 100 --json tagName --jq '.[3:][].tagName' | while read -r tag; do
+            [ -n "$tag" ] && gh release delete "$tag" --cleanup-tag --yes || true
+          done

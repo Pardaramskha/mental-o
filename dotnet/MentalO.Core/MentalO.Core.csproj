@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- MentalO.Core (26/10/2026) : le cœur de Mental-O sur .NET 8 — modèle de
+       la carte, historique (commandes annulables), persistance .tea v16,
+       exports (SVG, Markdown, OPML, JSON Canvas), réglages, mise à jour.
+       Aucune fenêtre : la toile n'est connue que par IToile. Il référence
+       Avalonia pour ses seuls types de base (Point, Rect, Vector, Color,
+       Key) — partagés par l'application autonome et le DLC Marabook. -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>MentalO.Core</AssemblyName>
+    <RootNamespace>Mentalo</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <Version>1.0.0</Version>
+    <NoWarn>CS0618;CS0108;CS0414;CS0169;CS0649;CS0219;CS1591;SYSLIB0014</NoWarn>
+    <SatelliteResourceLanguages>fr</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.22" />
+  </ItemGroup>
+
+</Project>

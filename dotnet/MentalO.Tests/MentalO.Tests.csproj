@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Le harnais de tests console de Mental-O (26/10/2026), contre le cœur
+       seul : aller-retour .tea v16, versions, éditeur de segments, puces,
+       exports, gestes. MentalOTests.exe : OK/ÉCHEC par test, code de retour
+       = nombre d'échecs. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>MentalOTests</AssemblyName>
+    <RootNamespace>Mentalo.Tests</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <NoWarn>CS0618;CS1591</NoWarn>
+    <SatelliteResourceLanguages>fr</SatelliteResourceLanguages>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MentalO.Core\MentalO.Core.csproj" />
+  </ItemGroup>
+
+</Project>
