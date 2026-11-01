@@ -75,7 +75,10 @@ jobs:
           - os: macos-latest
             rid: osx-arm64
             asset: mental-o-macos-arm64-portable.zip
-          - os: macos-13
+          # macOS Intel publié depuis le runner ARM (1/11) : « macos-13 » n'existe
+          # plus chez GitHub (le job attendait un runner 24 h puis tombait) ;
+          # dotnet publish -r osx-x64 se fait très bien depuis macos-latest.
+          - os: macos-latest
             rid: osx-x64
             asset: mental-o-macos-portable.zip
     runs-on: ${{ matrix.os }}
@@ -101,6 +104,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Pardaramskha/marabook
+          # La branche de Marabook qui porte le contrat des modules (1/11) :
+          # la variable de dépôt MARABOOK_REF (Settings > Variables), sinon
+          # main. Tant que la 1.1.0 n'est pas sortie, MARABOOK_REF = feat/1.1.0.
+          ref: ${{ vars.MARABOOK_REF || 'main' }}
           path: marabook
       - name: DLC Marabook (mental-o.mdlc)
         if: matrix.rid == 'win-x64'
