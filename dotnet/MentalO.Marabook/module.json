@@ -15,8 +15,8 @@
     "type": "MentalO.Marabook.Module"
   },
   "achievements": [
-    { "id": "mo-cartographe", "name": "Cartographe mental", "description": "Créez votre première carte mentale.", "rule": "mindmaps", "count": 1 },
-    { "id": "mo-atelier", "name": "Atelier de cartes", "description": "Ayez cinq cartes mentales dans un projet.", "rule": "mindmaps", "count": 5 },
-    { "id": "mo-toile", "name": "Toile d'araignée", "description": "Une carte mentale d'au moins cinquante boîtes.", "rule": "mindmap-nodes", "count": 50 }
+    { "id": "mo-cartographe", "name": "Un premier pas en enfer", "description": "Créez votre première carte mentale.", "rule": "mindmaps", "count": 1 },
+    { "id": "mo-atelier", "name": "Bientôt ce sera un deck entier", "description": "Ayez cinq cartes mentales dans un projet.", "rule": "mindmaps", "count": 5 },
+    { "id": "mo-toile", "name": "Fierté des TDAH", "description": "Une carte mentale d'au moins cinquante boîtes.", "rule": "mindmap-nodes", "count": 50 }
   ]
 }
