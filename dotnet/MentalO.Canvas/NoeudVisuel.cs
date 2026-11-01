@@ -498,7 +498,8 @@ namespace Mentalo.Vue
                 CornerRadius = new CornerRadius(3),
                 Cursor = Ui.CurseurMain,
                 Child = contenu,
-                HorizontalAlignment = TexteRiche.AlignementHorizontal(alignement)
+                // Une tuile (Affichage posé) se centre dans la boîte (1/11, Rémi) ; une ligne de lien suit l'alignement du texte.
+                HorizontalAlignment = piece.Affichage != null ? HorizontalAlignment.Center : TexteRiche.AlignementHorizontal(alignement)
             };
             if (!string.IsNullOrEmpty(infobulle)) Ui.Infobulle(cadre, infobulle);
             if (survol)

@@ -18,6 +18,10 @@ namespace Mentalo.Vue
     {
         private void PointeurEnfonce(object expediteur, PointerPressedEventArgs e)
         {
+            // La toile prend le clavier au clic (1/11, Rémi : Ctrl+K restait
+            // muet dans Marabook — les raccourcis de la toile ne s'écoutent que
+            // si le focus est dedans, et un clic ne le lui donnait pas).
+            if (!EditionEnCours && !(e.Source is TextBox) && !IsKeyboardFocusWithin) Focus();
             PointerPointProperties proprietes = e.GetCurrentPoint(this).Properties;
             if (proprietes.IsMiddleButtonPressed)
             {
