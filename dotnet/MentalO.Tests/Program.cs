@@ -32,6 +32,13 @@ namespace Mentalo.Tests
             Tester("gestes : interprétation et correspondance", Gestes);
             Tester("json canvas aller-retour", CanvasAllerRetour);
             Tester("flèches : A vers B, B vers A, les deux sens", Fleches);
+            Tester("mise en forme : sélection uniforme et bornée, toutes propriétés", FormatSelectionUniforme);
+            Tester("mise en forme : bascule sur une plage mêlée", FormatBasculeMelee);
+            Tester("mise en forme : alignement sans déborder sur la ligne d'après", FormatAlignementBorne);
+            Tester("mise en forme : forme en attente au curseur (gabarit)", FormatEnAttente);
+            Tester("mise en forme : curseur après la frappe, frontière de style", FormatCaretApresFrappe);
+            Tester("mise en forme : normalisation (fusion, vides, alignement)", FormatNormalisation);
+            Tester("mise en forme : aller-retour .tea de tous les attributs", FormatPersistance);
             Console.WriteLine();
             Console.WriteLine(_total + " test(s), " + _echecs + " échec(s)");
             return _echecs;
@@ -281,6 +288,230 @@ namespace Mentalo.Tests
             Verifier(noeuds[1].FondCouleur == "#C0392B", "couleur préréglée 1");
             Verifier(liens[0].Fleche == "simple" && liens[0].Etiquette == "vers", "arête");
             Verifier(groupes[0].NoeudIds.Count == 1 && groupes[0].NoeudIds[0] == noeuds[0].Id, "appartenance par géométrie");
+        }
+
+        // ------------------------------------------------------------------ mise en forme (1/11/2026)
+
+        private static bool Porte(Segment s, string propriete, object valeur)
+        {
+            switch (propriete)
+            {
+                case "police": return s.Police == (string)valeur;
+                case "taille": return Math.Abs(s.Taille - (double)valeur) < 0.01;
+                case "couleur": return s.Couleur == (string)valeur;
+                case "surlignage": return (s.Surlignage ?? "") == (((string)valeur) ?? "");
+                case "gras": return s.Gras == (bool)valeur;
+                case "italique": return s.Italique == (bool)valeur;
+                case "souligne": return s.Souligne == (bool)valeur;
+                case "barre": return s.Barre == (bool)valeur;
+                case "alignement": return (s.AlignementLigne ?? "") == (((string)valeur) ?? "");
+            }
+            return false;
+        }
+
+        /// <summary>Tous les segments qui recouvrent [debut, fin[ portent (ou non) la valeur.</summary>
+        private static bool Plage(List<Segment> segments, int debut, int fin, string propriete, object valeur, bool attendu)
+        {
+            int curseur = 0;
+            bool vu = false;
+            foreach (Segment s in segments)
+            {
+                int finSegment = curseur + s.Texte.Length;
+                if (finSegment > debut && curseur < fin)
+                {
+                    vu = true;
+                    if (Porte(s, propriete, valeur) != attendu) return false;
+                }
+                curseur = finSegment;
+            }
+            return vu;
+        }
+
+        private static void FormatSelectionUniforme()
+        {
+            object[,] balayage = new object[,]
+            {
+                { "police", "Georgia" }, { "taille", 24.0 }, { "couleur", "#C0392B" }, { "surlignage", "#FFF3A0" },
+                { "gras", true }, { "italique", true }, { "souligne", true }, { "barre", true }
+            };
+            List<Segment> source = new List<Segment>();
+            source.Add(new Segment { Texte = "Bonjour monde entier\nSeconde ligne" });
+            EditeurSegments e = new EditeurSegments(source);
+            for (int i = 0; i < balayage.GetLength(0); i++)
+            {
+                string p = (string)balayage[i, 0];
+                object v = balayage[i, 1];
+                e.AppliquerFormat(p, v, 0, 7);
+                Verifier(Plage(e.Segments, 0, 7, p, v, true), p + " : « Bonjour » le porte");
+                Verifier(Plage(e.Segments, 7, 34, p, v, false), p + " : le reste ne le porte pas");
+                Verifier(e.Texte == "Bonjour monde entier\nSeconde ligne", p + " : le texte ne change pas");
+            }
+            Verifier(e.Segments.Count == 2, "deux segments, pas de miettes (" + e.Segments.Count + ")");
+            // Une plage à cheval sur la frontière : coupe nette, uniforme.
+            e.AppliquerFormat("couleur", "#1E8449", 4, 10);
+            Verifier(Plage(e.Segments, 4, 10, "couleur", "#1E8449", true) && Plage(e.Segments, 0, 4, "couleur", "#C0392B", true)
+                && Plage(e.Segments, 10, 34, "couleur", Segment.CouleurDefaut, true), "couleur à cheval : trois zones nettes");
+            // Le surlignage « Aucun » (null) retire sans basculer quoi que ce soit.
+            e.AppliquerFormat("surlignage", null, 0, 34);
+            Verifier(Plage(e.Segments, 0, 34, "surlignage", null, true), "surlignage null = retiré partout");
+            Verifier(Plage(e.Segments, 0, 7, "gras", true, true), "…sans toucher au gras");
+            // La lecture pour la barre : à l'intérieur de la sélection.
+            FormatCourant etat = e.Lire(7, 0, 7, "gauche");
+            Verifier(etat.Gras && etat.Italique && etat.Souligne && etat.Barre && etat.Police == "Georgia" && Math.Abs(etat.Taille - 24) < 0.01, "l'état lu en fin de sélection est celui de la sélection");
+        }
+
+        private static void FormatBasculeMelee()
+        {
+            List<Segment> source = new List<Segment>();
+            source.Add(new Segment { Texte = "abc", Gras = true });
+            source.Add(new Segment { Texte = "def" });
+            EditeurSegments e = new EditeurSegments(source);
+            e.AppliquerFormat("gras", null, 0, 6); // mêlée : un seul maigre → tout en gras
+            Verifier(e.Segments.Count == 1 && e.Segments[0].Gras, "plage mêlée → tout en gras, un seul segment");
+            e.AppliquerFormat("gras", null, 0, 6); // tout en gras → tout en maigre
+            Verifier(e.Segments.Count == 1 && !e.Segments[0].Gras, "tout gras → tout maigre");
+            e.AppliquerFormat("italique", null, 2, 4);
+            Verifier(e.Segments.Count == 3 && e.Segments[1].Texte == "cd" && e.Segments[1].Italique, "italique sur « cd » : coupé aux bornes");
+            e.AppliquerFormat("barre", true, 2, 4);
+            e.AppliquerFormat("souligne", null, 2, 4);
+            Verifier(e.Segments[1].Barre && e.Segments[1].Souligne && !e.Segments[0].Barre && !e.Segments[2].Souligne, "barré et souligné restent bornés");
+            // Valeur explicite sur une plage mêlée : elle s'impose telle quelle.
+            e.AppliquerFormat("italique", false, 0, 6);
+            Verifier(Plage(e.Segments, 0, 6, "italique", false, true), "italique = faux imposé partout");
+            // Une plage vide ne fait rien ; des bornes inversées sont remises dans l'ordre.
+            string avant = e.Texte;
+            e.AppliquerFormat("gras", null, 3, 3);
+            Verifier(e.Texte == avant && Plage(e.Segments, 0, 6, "gras", false, true), "plage vide : rien");
+            e.AppliquerFormat("gras", null, 6, 0);
+            Verifier(Plage(e.Segments, 0, 6, "gras", true, true), "bornes inversées : toute la plage");
+        }
+
+        private static void FormatAlignementBorne()
+        {
+            List<Segment> source = new List<Segment>();
+            source.Add(new Segment { Texte = "un\ndeux\ntrois" });
+            EditeurSegments e = new EditeurSegments(source);
+            e.AppliquerFormat("alignement", "centre", 4, 4); // curseur dans « deux »
+            Verifier(e.Texte == "un\ndeux\ntrois", "le texte ne change pas");
+            Verifier(e.Lire(5, 5, 5, "gauche").Alignement == "centre", "« deux » est centrée");
+            Verifier(e.Lire(0, 0, 0, "gauche").Alignement == "gauche", "« un » reste à gauche");
+            Verifier(e.Lire(10, 10, 10, "gauche").Alignement == "gauche", "« trois » reste à gauche (l'alignement ne déborde pas sur la ligne d'après : " + e.Lire(10, 10, 10, "gauche").Alignement + ")");
+            Verifier(Plage(e.Segments, 3, 7, "alignement", "centre", true) && Plage(e.Segments, 7, 13, "alignement", "centre", false) && Plage(e.Segments, 0, 3, "alignement", "centre", false),
+                "seuls les segments de « deux » portent l'alignement");
+            // Une sélection qui couvre deux lignes : les deux, pas la troisième.
+            e.AppliquerFormat("alignement", "droite", 1, 5);
+            Verifier(e.Lire(0, 0, 0, "gauche").Alignement == "droite" && e.Lire(5, 5, 5, "gauche").Alignement == "droite" && e.Lire(10, 10, 10, "gauche").Alignement == "gauche",
+                "sélection sur deux lignes : « un » et « deux » à droite, « trois » à gauche");
+            // Les lignes rendues : PucesTexte.DecouperLignes garde l'alignement par ligne.
+            List<List<Segment>> lignes = PucesTexte.DecouperLignes(e.Segments);
+            Verifier(lignes.Count == 3 && lignes[0][0].AlignementLigne == "droite" && lignes[1][0].AlignementLigne == "droite" && string.IsNullOrEmpty(lignes[2][0].AlignementLigne),
+                "les lignes découpées portent chacune leur alignement");
+            // La dernière ligne (sans « \n » final) s'aligne aussi.
+            e.AppliquerFormat("alignement", "centre", 12, 12);
+            Verifier(e.Lire(10, 10, 10, "gauche").Alignement == "centre" && e.Lire(5, 5, 5, "gauche").Alignement == "droite", "la dernière ligne s'aligne seule");
+        }
+
+        private static void FormatEnAttente()
+        {
+            List<Segment> source = new List<Segment>();
+            source.Add(new Segment { Texte = "Bonjour " });
+            EditeurSegments e = new EditeurSegments(source);
+            Segment gabarit = e.StyleA(8);
+            Verifier(gabarit.Texte == "" && gabarit.Police == Segment.PoliceDefaut && !gabarit.Gras, "le gabarit au curseur est le style du caractère précédent, sans texte");
+            EditeurSegments.AppliquerProprieteA(gabarit, "gras", null);
+            EditeurSegments.AppliquerProprieteA(gabarit, "gras", null);
+            EditeurSegments.AppliquerProprieteA(gabarit, "gras", null);
+            EditeurSegments.AppliquerProprieteA(gabarit, "italique", true);
+            EditeurSegments.AppliquerProprieteA(gabarit, "police", "Georgia");
+            EditeurSegments.AppliquerProprieteA(gabarit, "taille", 20.0);
+            EditeurSegments.AppliquerProprieteA(gabarit, "couleur", "#C0392B");
+            EditeurSegments.AppliquerProprieteA(gabarit, "surlignage", "#FFF3A0");
+            Verifier(gabarit.Gras && gabarit.Italique && gabarit.Police == "Georgia" && gabarit.Taille == 20 && gabarit.Couleur == "#C0392B" && gabarit.Surlignage == "#FFF3A0", "le gabarit cumule les choix (bascule null = inverser)");
+            // La frappe qui suit (caret APRÈS la frappe = 12) : l'insertion est signalée, le gabarit s'y pose.
+            e.Synchroniser("Bonjour neuf", 12);
+            Verifier(e.DerniereInsertionDebut == 8 && e.DerniereInsertionLongueur == 4, "l'insertion « neuf » est signalée à 8, longueur 4 (" + e.DerniereInsertionDebut + ", " + e.DerniereInsertionLongueur + ")");
+            e.AppliquerGabarit(gabarit, e.DerniereInsertionDebut, e.DerniereInsertionDebut + e.DerniereInsertionLongueur);
+            Verifier(Plage(e.Segments, 8, 12, "gras", true, true) && Plage(e.Segments, 8, 12, "police", "Georgia", true) && Plage(e.Segments, 8, 12, "surlignage", "#FFF3A0", true), "« neuf » porte tout le gabarit");
+            Verifier(Plage(e.Segments, 0, 8, "gras", true, false) && Plage(e.Segments, 0, 8, "police", Segment.PoliceDefaut, true), "« Bonjour » ne bouge pas");
+            // La suite de la frappe hérite du caractère précédent, sans gabarit.
+            e.Synchroniser("Bonjour neufs", 13);
+            Verifier(Plage(e.Segments, 8, 13, "gras", true, true) && e.Segments.Count == 2, "la frappe continue dans la forme (" + e.Segments.Count + " segments)");
+            // Sans insertion (effacement), rien n'est signalé.
+            e.Synchroniser("Bonjour neuf", 12);
+            Verifier(e.DerniereInsertionLongueur == 0, "un effacement n'insère rien");
+            // Le gabarit ne touche pas l'alignement de ligne.
+            List<Segment> aligne = new List<Segment>();
+            aligne.Add(new Segment { Texte = "a\nb", AlignementLigne = "centre" });
+            EditeurSegments e2 = new EditeurSegments(aligne);
+            e2.AppliquerGabarit(gabarit, 2, 3);
+            Verifier(e2.Segments[e2.Segments.Count - 1].AlignementLigne == "centre" && e2.Segments[e2.Segments.Count - 1].Gras, "le gabarit laisse l'alignement de ligne");
+        }
+
+        private static void FormatCaretApresFrappe()
+        {
+            // Insertion au curseur (sans sélection) : curseur + longueur insérée.
+            Verifier(EditeurSegments.CaretApresFrappe("abcdef", "abcdxef", 4, 4, 4) == 5, "insertion simple");
+            Verifier(EditeurSegments.CaretApresFrappe("abcdef", "abcdxyzef", 4, 4, 4) == 7, "collage de trois caractères");
+            // Une sélection remplacée : début de la sélection + longueur insérée.
+            Verifier(EditeurSegments.CaretApresFrappe("abcdef", "aXYef", 1, 1, 4) == 3, "sélection [1,4[ remplacée par XY");
+            Verifier(EditeurSegments.CaretApresFrappe("abcdef", "aXYef", 4, 4, 1) == 3, "sélection inversée [4,1]");
+            Verifier(EditeurSegments.CaretApresFrappe("abcdef", "aef", 4, 1, 4) == 1, "sélection effacée");
+            // Un effacement sans sélection (Retour arrière, Suppr) : le curseur fourni est rendu tel quel.
+            Verifier(EditeurSegments.CaretApresFrappe("abcdef", "abcef", 4, 4, 4) == 4, "effacement : curseur rendu tel quel");
+            // Un changement qui ne s'accorde pas (annulation, texte posé) : le curseur fourni est rendu tel quel.
+            Verifier(EditeurSegments.CaretApresFrappe("abcdef", "zzzzzzz", 4, 4, 4) == 4, "texte remplacé en bloc : curseur rendu tel quel");
+            Verifier(EditeurSegments.CaretApresFrappe("", "a", 0, 0, 0) == 1 && EditeurSegments.CaretApresFrappe(null, "a", 0, 0, 0) == 1, "premier caractère d'une boîte vide");
+
+            // Au cœur du bogue (1/11) : « abc » gras puis « def » italique, taper « x » juste après « d ».
+            // Avec le curseur d'AVANT la frappe (4), l'éditeur croyait l'insertion à 3 et rendait « d » gras.
+            List<Segment> source = new List<Segment>();
+            source.Add(new Segment { Texte = "abc", Gras = true });
+            source.Add(new Segment { Texte = "def", Italique = true });
+            EditeurSegments e = new EditeurSegments(source);
+            int caret = EditeurSegments.CaretApresFrappe(e.Texte, "abcdxef", 4, 4, 4);
+            e.Synchroniser("abcdxef", caret);
+            Verifier(e.Segments.Count == 2 && e.Segments[0].Texte == "abc" && e.Segments[1].Texte == "dxef" && e.Segments[1].Italique && !e.Segments[1].Gras,
+                "« x » hérite de « d » (italique), « d » reste italique : " + e.Segments[0].Texte + " | " + e.Segments[1].Texte);
+            // Et juste après « c » : « x » gras.
+            e.Synchroniser("abcxdxef", EditeurSegments.CaretApresFrappe(e.Texte, "abcxdxef", 3, 3, 3));
+            Verifier(e.Segments[0].Texte == "abcx" && e.Segments[0].Gras && e.Segments[1].Texte == "dxef", "« x » après « c » hérite du gras : " + e.Segments[0].Texte);
+            // Une sélection à cheval remplacée : l'insertion prend le style du caractère devant la sélection.
+            e.Synchroniser("abZZef", EditeurSegments.CaretApresFrappe(e.Texte, "abZZef", 6, 2, 6));
+            Verifier(e.Texte == "abZZef" && e.Segments[0].Texte == "abZZ" && e.Segments[0].Gras && e.Segments[1].Texte == "ef" && e.Segments[1].Italique, "remplacement d'une sélection à cheval : " + e.Segments[0].Texte + " | " + e.Segments[1].Texte);
+        }
+
+        private static void FormatNormalisation()
+        {
+            List<Segment> source = new List<Segment>();
+            source.Add(new Segment { Texte = "ab", Gras = true });
+            source.Add(new Segment { Texte = "", Italique = true });
+            source.Add(new Segment { Texte = "cd", Gras = true });
+            source.Add(new Segment { Texte = "ef", Gras = true, AlignementLigne = "centre" });
+            source.Add(new Segment { Texte = "gh", Gras = true, AlignementLigne = "centre", Surlignage = "#FFF3A0" });
+            source.Add(new Segment { Texte = "ij", Gras = true, AlignementLigne = "centre", Surlignage = "#FFF3A0" });
+            List<Segment> n = Segments.Normaliser(source);
+            Verifier(n.Count == 3 && n[0].Texte == "abcd" && n[1].Texte == "ef" && n[2].Texte == "ghij", "fusion des voisins de même style, vides retirés, alignement et surlignage séparent (" + n.Count + ")");
+            Verifier(n[0].Gras && n[1].AlignementLigne == "centre" && n[2].Surlignage == "#FFF3A0", "les attributs sont conservés");
+            Verifier(source[0].Texte == "ab", "la source n'est pas modifiée");
+            Segment a = new Segment { Texte = "x" };
+            Segment b = new Segment { Texte = "y", AlignementLigne = "" };
+            Verifier(a.MemeStyleQue(b), "alignement null et vide sont le même style");
+            Verifier(Segments.Normaliser(new List<Segment>()).Count == 0, "rien → rien");
+        }
+
+        private static void FormatPersistance()
+        {
+            DocumentCarte d = new DocumentCarte();
+            Noeud n = new Noeud();
+            n.Segments.Add(new Segment { Texte = "Bonjour", Police = "Georgia", Taille = 24, Couleur = "#C0392B", Surlignage = "#FFF3A0", Gras = true, Italique = true, Souligne = true, Barre = true, AlignementLigne = "centre" });
+            n.Segments.Add(new Segment { Texte = " monde\nSeconde", AlignementLigne = "droite" });
+            n.Alignement = "droite";
+            n.SegmentsApres.Add(new Segment { Texte = "après", Souligne = true, Barre = true, Taille = 10 });
+            n.ImageDonnees = new byte[] { 1, 2, 3 }; n.ImageExtension = ".png"; n.ImageLargeur = 10; n.ImageHauteur = 10;
+            d.Noeuds.Add(n);
+            Noeud r = Fichier.Charger(Fichier.EnregistrerEnMemoire(d, null)).TrouverNoeud(n.Id);
+            Verifier(r != null && Noeud.SegmentsEgaux(n.Segments, r.Segments) && Noeud.SegmentsEgaux(n.SegmentsApres, r.SegmentsApres) && r.Alignement == "droite",
+                "tous les attributs (police, taille, couleur, surlignage, gras, italique, souligné, barré, alignement de ligne) reviennent à l'identique, avant et après l'image");
         }
 
         /// <summary>« inverse » (27/10/2026) : la pointe sur la boîte de départ — le

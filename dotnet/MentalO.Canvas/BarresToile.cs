@@ -42,6 +42,20 @@ namespace Mentalo.Vue
         private Border _barreFormat;
         private Panel _panneauTexte, _panneauBoites, _panneauGroupes, _panneauLiens;
         private ComboBox _comboPolice, _comboTaille, _comboCouleur, _comboSurlignage;
+
+        /// <summary>Un sélecteur de police venu de l'hôte (1/11, Rémi : dans
+        /// Marabook, l'autocomplète de son éditeur) : le contrôle à poser dans
+        /// le panneau Texte, la police courante à lui montrer (vide = mêlée),
+        /// et son choix. Null = la liste déroulante de la toile.</summary>
+        public interface ISelecteurPolice
+        {
+            Control Controle { get; }
+            void Poser(string police);
+            event Action<string> Choisie;
+        }
+
+        public static Func<ISelecteurPolice> FabriqueSelecteurPolice;
+        private ISelecteurPolice _selecteurPolice;
         private ToggleButton _btnGras, _btnItalique, _btnSouligne, _btnBarre;
         private ToggleButton _btnAlignGauche, _btnAlignCentre, _btnAlignDroite;
         private ComboBox _comboFond, _comboBordureCouleur, _comboBordureEpaisseur, _comboBordureTrait, _comboCoins;
@@ -700,11 +714,26 @@ namespace Mentalo.Vue
             Panel pile = NouveauPanneau();
             Panel panneau = Rangee(pile);
 
-            _comboPolice = Combo(180, "Police — toutes les polices installées");
-            foreach (string police in TexteRiche.PolicesSysteme())
-                _comboPolice.Items.Add(new ComboBoxItem { Content = police, Tag = police, FontFamily = TexteRiche.Police(police) });
-            SurChoix(_comboPolice, delegate(ComboBoxItem c) { _toile.AppliquerFormatTexte("police", (string)c.Tag); });
-            panneau.Children.Add(AvecEtiquette("Police", _comboPolice));
+            // Le sélecteur de police : celui de l'hôte s'il en fournit un (1/11, Rémi :
+            // l'autocomplète de Marabook, le même que dans son éditeur), sinon la liste.
+            if (FabriqueSelecteurPolice != null) _selecteurPolice = FabriqueSelecteurPolice();
+            if (_selecteurPolice != null)
+            {
+                _selecteurPolice.Choisie += delegate(string police)
+                {
+                    if (_synchroEnCours || string.IsNullOrEmpty(police)) return;
+                    _toile.AppliquerFormatTexte("police", police);
+                };
+                panneau.Children.Add(AvecEtiquette("Police", _selecteurPolice.Controle));
+            }
+            else
+            {
+                _comboPolice = Combo(180, "Police — toutes les polices installées");
+                foreach (string police in TexteRiche.PolicesSysteme())
+                    _comboPolice.Items.Add(new ComboBoxItem { Content = police, Tag = police, FontFamily = TexteRiche.Police(police) });
+                SurChoix(_comboPolice, delegate(ComboBoxItem c) { _toile.AppliquerFormatTexte("police", (string)c.Tag); });
+                panneau.Children.Add(AvecEtiquette("Police", _comboPolice));
+            }
 
             _comboTaille = Combo(66, "Taille du texte (« Autre… » pour une valeur libre, 6 à 120)");
             foreach (double taille in Palette.Tailles) _comboTaille.Items.Add(Choix(taille.ToString(), taille));
@@ -876,6 +905,12 @@ namespace Mentalo.Vue
         public void MettreAJourFormat()
         {
             if (_panneauTexte == null) return;
+            // Pas de rentrée (1/11/2026) : poser l'index d'une combo dont la liste est
+            // déroulée déplace le clavier, l'éditeur efface sa sélection, la toile
+            // resignale… et un second passage remettait _synchroEnCours à faux sous
+            // les pieds du premier — les combos appliquaient alors leur propre
+            // synchronisation comme un choix (débordement de pile dans Marabook).
+            if (_synchroEnCours) return;
             if (_toile.Document != _documentCouleurs || _toile.Document.CouleursPersonnalisees.Count != _nbCouleursPerso)
                 RemplirCombosCouleurs();
 
@@ -897,7 +932,7 @@ namespace Mentalo.Vue
                 MettreAJourBarreLiens();
                 MettreAJourSections(etat);
 
-                SelectionnerParTag(_comboPolice, etat.Police);
+                if (_selecteurPolice != null) _selecteurPolice.Poser(etat.Police); else SelectionnerParTag(_comboPolice, etat.Police);
                 SelectionnerParNombre(_comboTaille, etat.Taille);
                 _btnGras.IsChecked = etat.Gras;
                 _btnItalique.IsChecked = etat.Italique;

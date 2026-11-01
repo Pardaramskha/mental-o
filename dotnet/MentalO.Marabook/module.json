@@ -2,7 +2,7 @@
   "id": "mental-o",
   "name": "Mental-O",
   "title": "Cartes mentales",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "features": [
     "Une racine « Cartes mentales » dans la Pile (section Structure) : vos cartes vivent dans le projet, enregistrées avec lui",
     "La toile de Mental-O à la sauce Marabook : boîtes, liens, groupes, images, fichiers, notes, étiquettes, thèmes, présentation",
