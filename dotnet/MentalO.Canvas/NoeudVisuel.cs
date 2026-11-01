@@ -626,6 +626,17 @@ namespace Mentalo.Vue
             _synchro = false;
         }
 
+        /// <summary>Le texte en cours de frappe copié dans le modèle, l'éditeur
+        /// restant ouvert (1/11, Rémi) : de quoi sérialiser la carte (secours,
+        /// enregistrement automatique) sans sortir le caret de la boîte. Une
+        /// annulation (Échap) rend toujours le texte d'avant l'édition.</summary>
+        public void SynchroniserEdition()
+        {
+            if (!_enEdition) return;
+            Modele.Segments = TexteRiche.Normaliser(_segmentsEdition.Segments);
+            Modele.SegmentsApres = Modele.EstImage ? TexteRiche.Normaliser(_segmentsEditionApres.Segments) : new List<Segment>();
+        }
+
         public void TerminerEdition(bool valider)
         {
             if (!_enEdition) return;

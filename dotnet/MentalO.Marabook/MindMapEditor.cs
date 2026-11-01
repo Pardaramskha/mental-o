@@ -181,7 +181,10 @@ namespace MentalO.Marabook
 
         public byte[] Save(byte[] previous)
         {
-            _toile.ValiderEditionEnCours(); // le texte encore dans le TextBox rejoint le modèle avant la sérialisation
+            // Le texte encore dans le TextBox rejoint le modèle avant la sérialisation,
+            // SANS fermer l'édition (1/11, Rémi : Marabook enregistre en secours toutes
+            // les 30 s — valider sortait le caret de la boîte).
+            _toile.SynchroniserEditionEnCours();
             byte[] bytes = Fichier.EnregistrerEnMemoire(_toile.Document, previous);
             _dirty = false;
             return bytes;

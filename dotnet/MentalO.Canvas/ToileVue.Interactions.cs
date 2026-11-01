@@ -1257,6 +1257,16 @@ namespace Mentalo.Vue
                 if (v.EnEdition) v.TerminerEdition(true);
         }
 
+        /// <summary>Le texte en cours de frappe rejoint le modèle SANS fermer
+        /// l'éditeur (1/11, Rémi) : pour une sauvegarde de secours ou un
+        /// enregistrement automatique pendant qu'on écrit dans une boîte —
+        /// valider fermait la boîte et sortait le caret toutes les 30 s.</summary>
+        public void SynchroniserEditionEnCours()
+        {
+            foreach (NoeudVisuel v in _selectionnes)
+                if (v.EnEdition) v.SynchroniserEdition();
+        }
+
         public bool EditionEnCours
         {
             get
