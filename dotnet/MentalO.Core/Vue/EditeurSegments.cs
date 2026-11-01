@@ -24,6 +24,11 @@ namespace Mentalo.Vue
 
         public string Texte { get { return Mentalo.Vue.Segments.TextePlat(_segments); } }
 
+        /// <summary>Ce que la dernière synchronisation a inséré : position et longueur
+        /// (0 quand rien n'a été inséré) — la forme en attente au curseur s'y applique.</summary>
+        public int DerniereInsertionDebut { get; private set; }
+        public int DerniereInsertionLongueur { get; private set; }
+
         /// <summary>Le texte a changé dans le TextBox : réconcilie les segments.
         /// « caret » = position du curseur après la frappe (sert à placer l'insertion
         /// quand l'ancien et le nouveau texte ont plusieurs réconciliations possibles).</summary>
@@ -31,6 +36,8 @@ namespace Mentalo.Vue
         {
             nouveau = nouveau ?? "";
             string ancien = Texte;
+            DerniereInsertionDebut = 0;
+            DerniereInsertionLongueur = 0;
             if (ancien == nouveau) return;
             int prefixe = 0;
             int maxPrefixe = Math.Min(ancien.Length, nouveau.Length);
@@ -46,7 +53,86 @@ namespace Mentalo.Vue
                 suffixe++;
             int retire = ancien.Length - prefixe - suffixe;
             string insere = nouveau.Substring(prefixe, nouveau.Length - prefixe - suffixe);
+            DerniereInsertionDebut = prefixe;
+            DerniereInsertionLongueur = insere.Length;
             Remplacer(prefixe, retire, insere);
+        }
+
+        /// <summary>Le curseur APRÈS une frappe, déduit de l'état du TextBox AVANT qu'il
+        /// ne le déplace — Avalonia pose le texte, puis seulement le curseur (1/11/2026) :
+        /// la sélection remplacée (ou le curseur) plus ce qui a été inséré. Quand l'ancien
+        /// et le nouveau texte ne s'accordent pas avec cette lecture (annulation, texte
+        /// posé par programme), le curseur fourni est rendu tel quel.</summary>
+        public static int CaretApresFrappe(string ancien, string nouveau, int caret, int selectionDebut, int selectionFin)
+        {
+            ancien = ancien ?? "";
+            nouveau = nouveau ?? "";
+            int debut = Math.Max(0, Math.Min(ancien.Length, Math.Min(selectionDebut, selectionFin)));
+            int fin = Math.Max(0, Math.Min(ancien.Length, Math.Max(selectionDebut, selectionFin)));
+            if (fin <= debut) debut = fin = Math.Max(0, Math.Min(ancien.Length, caret));
+            int insere = nouveau.Length - (ancien.Length - (fin - debut));
+            if (insere < 0) return caret;
+            int apres = debut + insere;
+            if (apres > nouveau.Length) return caret;
+            if (string.CompareOrdinal(ancien, 0, nouveau, 0, debut) != 0) return caret;
+            if (string.CompareOrdinal(ancien, fin, nouveau, apres, ancien.Length - fin) != 0) return caret;
+            return apres;
+        }
+
+        /// <summary>Le style en vigueur à une position (celui du caractère qui précède,
+        /// sinon du suivant, sinon les défauts) : un segment sans texte, à cloner.</summary>
+        public Segment StyleA(int position)
+        {
+            Segment s = SegmentA(Math.Max(0, position - 1)) ?? SegmentA(position);
+            Segment gabarit = s != null ? s.Cloner() : new Segment();
+            gabarit.Texte = "";
+            gabarit.AlignementLigne = null;
+            return gabarit;
+        }
+
+        /// <summary>Pose une propriété de mise en forme sur un segment. Pour les
+        /// bascules (gras, italique, souligne, barre), valeur null = inverser.</summary>
+        public static void AppliquerProprieteA(Segment s, string propriete, object valeur)
+        {
+            switch (propriete)
+            {
+                case "police": s.Police = (string)valeur; break;
+                case "taille": s.Taille = (double)valeur; break;
+                case "couleur": s.Couleur = (string)valeur; break;
+                case "surlignage": s.Surlignage = (string)valeur; break;
+                case "gras": s.Gras = valeur == null ? !s.Gras : (bool)valeur; break;
+                case "italique": s.Italique = valeur == null ? !s.Italique : (bool)valeur; break;
+                case "souligne": s.Souligne = valeur == null ? !s.Souligne : (bool)valeur; break;
+                case "barre": s.Barre = valeur == null ? !s.Barre : (bool)valeur; break;
+            }
+        }
+
+        /// <summary>Donne à la plage [debut, fin[ tout le style d'un gabarit (police,
+        /// taille, couleur, surlignage, gras, italique, souligné, barré) — pas son
+        /// alignement de ligne, qui reste celui de la ligne.</summary>
+        public void AppliquerGabarit(Segment gabarit, int debut, int fin)
+        {
+            if (fin <= debut) return;
+            Couper(debut);
+            Couper(fin);
+            int curseur = 0;
+            foreach (Segment s in _segments)
+            {
+                int finSegment = curseur + s.Texte.Length;
+                if (curseur >= debut && finSegment <= fin && s.Texte.Length > 0)
+                {
+                    s.Police = gabarit.Police;
+                    s.Taille = gabarit.Taille;
+                    s.Couleur = gabarit.Couleur;
+                    s.Surlignage = gabarit.Surlignage;
+                    s.Gras = gabarit.Gras;
+                    s.Italique = gabarit.Italique;
+                    s.Souligne = gabarit.Souligne;
+                    s.Barre = gabarit.Barre;
+                }
+                curseur = finSegment;
+            }
+            _segments = Mentalo.Vue.Segments.Normaliser(_segments);
         }
 
         /// <summary>Remplace « longueur » caractères à partir de « debut » par « insere »,
@@ -170,20 +256,12 @@ namespace Mentalo.Vue
                     : propriete == "souligne" ? s.Souligne : s.Barre;
                 if (!actif) { tousActifs = false; break; }
             }
+            // Une bascule sur une plage mêlée (gras et maigre) va dans le même sens partout :
+            // vers l'actif si un seul segment ne l'est pas.
+            bool estBascule = propriete == "gras" || propriete == "italique" || propriete == "souligne" || propriete == "barre";
+            object effective = bascule && estBascule ? (object)!tousActifs : valeur;
             foreach (Segment s in cibles)
-            {
-                switch (propriete)
-                {
-                    case "police": s.Police = (string)valeur; break;
-                    case "taille": s.Taille = (double)valeur; break;
-                    case "couleur": s.Couleur = (string)valeur; break;
-                    case "surlignage": s.Surlignage = (string)valeur; break;
-                    case "gras": s.Gras = bascule ? !tousActifs : (bool)valeur; break;
-                    case "italique": s.Italique = bascule ? !tousActifs : (bool)valeur; break;
-                    case "souligne": s.Souligne = bascule ? !tousActifs : (bool)valeur; break;
-                    case "barre": s.Barre = bascule ? !tousActifs : (bool)valeur; break;
-                }
-            }
+                AppliquerProprieteA(s, propriete, effective);
             _segments = Mentalo.Vue.Segments.Normaliser(_segments);
         }
 
@@ -209,22 +287,15 @@ namespace Mentalo.Vue
             foreach (Segment s in _segments)
             {
                 int finSegment = curseur + s.Texte.Length;
-                // Les segments qui touchent la plage de lignes (y compris le « \n » final).
-                if (finSegment > debutLignes && curseur <= finLignes)
-                    AppliquerAlignementSegment(s, curseur, debutLignes, finLignes, alignement);
+                // Les segments qui chevauchent STRICTEMENT la plage de lignes [debutLignes, finLignes[.
+                // Le « \n » qui clôt la dernière ligne visée appartient au segment suivant (la
+                // coupe tombe juste devant lui) : l'inclure donnait l'alignement à la ligne
+                // d'après (1/11/2026 — « alignement pas uniforme » dans Marabook).
+                if (finSegment > debutLignes && curseur < finLignes)
+                    s.AlignementLigne = alignement;
                 curseur = finSegment;
             }
             _segments = Mentalo.Vue.Segments.Normaliser(_segments);
-        }
-
-        /// <summary>Un segment peut chevaucher plusieurs lignes : on ne change que la
-        /// part qui tombe dans les lignes visées, en le coupant aux « \n ».</summary>
-        private void AppliquerAlignementSegment(Segment s, int origine, int debutLignes, int finLignes, string alignement)
-        {
-            // Le segment est déjà coupé aux bornes ; s'il contient des « \n » en dehors,
-            // il a été coupé par BornesLigne/Couper sur ces bornes. Reste le cas d'un
-            // segment multi-lignes entièrement dans la plage : toutes ses lignes prennent l'alignement.
-            s.AlignementLigne = alignement;
         }
 
         /// <summary>L'état de mise en forme à une position (pour la barre).</summary>

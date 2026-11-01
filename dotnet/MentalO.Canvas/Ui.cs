@@ -123,7 +123,7 @@ namespace Mentalo.Vue
         {
             if (menu == null || ancre == null) return;
             menu.Placement = PlacementMode.Pointer;
-            menu.Open(ancre);
+            Ouvrir(menu, ancre);
         }
 
         /// <summary>Ouvre un menu contextuel sous un élément (lien de fichier…).</summary>
@@ -131,7 +131,32 @@ namespace Mentalo.Vue
         {
             if (menu == null || ancre == null) return;
             menu.Placement = PlacementMode.Bottom;
+            Ouvrir(menu, ancre);
+        }
+
+        private static ContextMenu _menuOuvert;
+
+        /// <summary>Un seul menu de la toile à la fois (1/11, Rémi : des clics
+        /// droits enchaînés laissaient des menus ouverts) : le précédent se
+        /// ferme avant que le suivant ne s'ouvre.</summary>
+        private static void Ouvrir(ContextMenu menu, Control ancre)
+        {
+            ContextMenu precedent = _menuOuvert;
+            if (precedent != null && precedent != menu)
+            {
+                try { precedent.Close(); } catch (Exception) { }
+            }
+            _menuOuvert = menu;
+            menu.Closed += delegate { if (_menuOuvert == menu) _menuOuvert = null; };
             menu.Open(ancre);
+        }
+
+        /// <summary>Ferme le menu de la toile encore ouvert, s'il y en a un.</summary>
+        public static void FermerMenuOuvert()
+        {
+            ContextMenu menu = _menuOuvert;
+            _menuOuvert = null;
+            if (menu != null) { try { menu.Close(); } catch (Exception) { } }
         }
 
         /// <summary>Une pastille carrée arrondie de la couleur donnée (icône de menu).</summary>

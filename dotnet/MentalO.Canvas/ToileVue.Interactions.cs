@@ -18,6 +18,10 @@ namespace Mentalo.Vue
     {
         private void PointeurEnfonce(object expediteur, PointerPressedEventArgs e)
         {
+            // La toile prend le clavier au clic (1/11, Rémi : Ctrl+K restait
+            // muet dans Marabook — les raccourcis de la toile ne s'écoutent que
+            // si le focus est dedans, et un clic ne le lui donnait pas).
+            if (!EditionEnCours && !(e.Source is TextBox) && !IsKeyboardFocusWithin) Focus();
             PointerPointProperties proprietes = e.GetCurrentPoint(this).Properties;
             if (proprietes.IsMiddleButtonPressed)
             {
@@ -1255,6 +1259,16 @@ namespace Mentalo.Vue
         {
             foreach (NoeudVisuel v in new List<NoeudVisuel>(_selectionnes))
                 if (v.EnEdition) v.TerminerEdition(true);
+        }
+
+        /// <summary>Le texte en cours de frappe rejoint le modèle SANS fermer
+        /// l'éditeur (1/11, Rémi) : pour une sauvegarde de secours ou un
+        /// enregistrement automatique pendant qu'on écrit dans une boîte —
+        /// valider fermait la boîte et sortait le caret toutes les 30 s.</summary>
+        public void SynchroniserEditionEnCours()
+        {
+            foreach (NoeudVisuel v in _selectionnes)
+                if (v.EnEdition) v.SynchroniserEdition();
         }
 
         public bool EditionEnCours

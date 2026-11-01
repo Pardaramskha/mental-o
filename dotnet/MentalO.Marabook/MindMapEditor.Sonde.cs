@@ -160,7 +160,7 @@ namespace MentalO.Marabook
             };
             Action ecrire = delegate { try { File.WriteAllText(chemin, log.ToString()); } catch { } };
             // Chien de garde : quoi qu'il arrive, Marabook quitte.
-            Task.Run(async delegate { await Task.Delay(55000); log.AppendLine("KO  chien de garde : la sonde n'a pas fini"); ecrire(); Environment.Exit(3); });
+            Task.Run(async delegate { await Task.Delay(110000); log.AppendLine("KO  chien de garde : la sonde n'a pas fini"); ecrire(); Environment.Exit(3); });
             try
             {
                 await Task.Delay(800);
@@ -241,8 +241,12 @@ namespace MentalO.Marabook
                 verifier(IsDirty, "une édition ouverte rend la carte « modifiée »");
                 byte[] sauve = Save(null);
                 Noeud nSauve = Fichier.Charger(sauve).TrouverNoeud(premier.Id);
-                verifier(!_toile.EditionEnCours && nSauve != null && nSauve.TextePlat.EndsWith("fin bis ter"),
-                    "enregistrer en pleine édition valide et garde le texte (" + (nSauve == null ? "-" : Echapper(nSauve.TextePlat)) + ")");
+                // Depuis le 1/11 (Rémi), enregistrer ne ferme plus l'éditeur : le texte tapé part dans le .tea, le caret reste.
+                verifier(_toile.EditionEnCours && nSauve != null && nSauve.TextePlat.EndsWith("fin bis ter"),
+                    "enregistrer en pleine édition garde le texte sans fermer l'éditeur (" + (nSauve == null ? "-" : Echapper(nSauve.TextePlat)) + ")");
+                _toile.ValiderEditionEnCours();
+                await Task.Delay(200);
+                verifier(!_toile.EditionEnCours && premier.TextePlat.EndsWith("fin bis ter"), "valider l'édition ferme l'éditeur et garde le texte");
 
                 // Lien vers une fiche, puis tuile, dans la boîte ; aller-retour .tea.
                 _toile.AllerAuNoeud(premier);
@@ -328,6 +332,9 @@ namespace MentalO.Marabook
                 verifier(_compteurRecherche.Text == "1/1" && _toile.NoeudSelectionne != null && _toile.NoeudSelectionne.TextePlat.StartsWith("Keira"), "taper « Keira » compte 1/1 et sélectionne la boîte");
                 _champRecherche.Text = "";
                 _toile.Focus();
+
+                // La mise en forme du texte (1/11) : toutes les propriétés, dans les trois situations, par l'API et par le rail.
+                await SonderMiseEnForme(verifier);
 
                 // La vignette d'une tuile prend toute la largeur demandée.
                 Control vignette = Vignette.Dessiner(tea, 192, 96);

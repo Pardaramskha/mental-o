@@ -61,6 +61,8 @@ namespace MentalO.Marabook
             _host = host;
             Courant = this;
             _toile = new ToileVue();
+            // Le sélecteur de police du rail = l'autocomplète de Marabook (1/11, Rémi), posé avant les barres.
+            BarresToile.FabriqueSelecteurPolice = delegate { return new SelecteurPoliceMarabook(); };
             _barres = new BarresToile(_toile, _habillage, true);
             _panneaux = new PanneauxFlottants(_toile, delegate { return _host.MainWindow; }, _habillage, false);
             _panneaux.HistoriqueAutorise = false; // Ctrl+Z suffit : pas de panneau Historique dans Marabook
@@ -181,7 +183,10 @@ namespace MentalO.Marabook
 
         public byte[] Save(byte[] previous)
         {
-            _toile.ValiderEditionEnCours(); // le texte encore dans le TextBox rejoint le modèle avant la sérialisation
+            // Le texte encore dans le TextBox rejoint le modèle avant la sérialisation,
+            // SANS fermer l'édition (1/11, Rémi : Marabook enregistre en secours toutes
+            // les 30 s — valider sortait le caret de la boîte).
+            _toile.SynchroniserEditionEnCours();
             byte[] bytes = Fichier.EnregistrerEnMemoire(_toile.Document, previous);
             _dirty = false;
             return bytes;
@@ -591,6 +596,37 @@ namespace MentalO.Marabook
             _indiceResultat = (_indiceResultat + sens + _resultats.Count) % _resultats.Count;
             _compteurRecherche.Text = (_indiceResultat + 1) + "/" + _resultats.Count;
             _toile.AllerAuNoeud(_resultats[_indiceResultat]);
+        }
+
+        // ============================================================ la police par l'autocomplète de Marabook
+
+        /// <summary>Le FontPicker de Marabook (frappe stricte, flèches en
+        /// aperçu, Entrée pour choisir) dans le panneau Texte du rail (1/11,
+        /// Rémi). Poser() suit la sélection sans rien appliquer ; Choisie
+        /// relaie chaque police choisie ou prévisualisée à la toile.</summary>
+        private sealed class SelecteurPoliceMarabook : BarresToile.ISelecteurPolice
+        {
+            private readonly FontPicker _picker;
+            public event Action<string> Choisie;
+
+            public SelecteurPoliceMarabook()
+            {
+                _picker = new FontPicker { Width = 180, VerticalAlignment = VerticalAlignment.Center };
+                ToolTip.SetTip(_picker, "Police : tapez son nom (l'autocomplète propose), Entrée pour choisir, flèches pour essayer");
+                _picker.FontChosen += delegate(string name, bool preview)
+                {
+                    Action<string> handler = Choisie;
+                    if (handler != null && !string.IsNullOrEmpty(name)) handler(name);
+                };
+            }
+
+            public Control Controle { get { return _picker; } }
+
+            public void Poser(string police)
+            {
+                if (string.IsNullOrEmpty(police)) _picker.ShowMixed();
+                else _picker.Select(police);
+            }
         }
 
         // ============================================================ liens vers Marabook : fiches, écrits, tuiles

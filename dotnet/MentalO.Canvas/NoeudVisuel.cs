@@ -75,6 +75,25 @@ namespace Mentalo.Vue
         private List<Segment> _segmentsApresAvantEdition;
         private string _alignementAvantEdition;
 
+        // LA SÉLECTION MÉMORISÉE (1/11/2026, Rémi : « gras non appliqué, police pas
+        // uniforme » dans Marabook). Le TextBox d'Avalonia EFFACE sa sélection dès
+        // qu'il perd le clavier (sauf pour son propre menu contextuel) : un clic sur
+        // une liste du rail (police, taille, couleur…) la perdait avant que le choix
+        // ne s'applique, et la forme tombait sur le mot sous le curseur. L'éditeur
+        // est prié de ne plus l'effacer (ClearSelectionOnLostFocus) et, par sûreté,
+        // on garde la dernière sélection faite PENDANT qu'il avait le clavier pour
+        // la viser et la remettre après l'application.
+        private TextBox _editeurMemorise;
+        private int _selectionMemoriseeDebut, _selectionMemoriseeFin;
+
+        // LA FORME EN ATTENTE AU CURSEUR (1/11/2026) : sans sélection et sans mot sous
+        // le curseur (boîte vide, fin de texte après une espace), la forme choisie
+        // vaut pour la frappe qui suit — comme dans tout traitement de texte. Elle
+        // tombe au premier déplacement du curseur.
+        private Segment _formatEnAttente;
+        private int _positionEnAttente = -1;
+        private TextBox _editeurEnAttente;
+
         /// <summary>Fabrique du menu contextuel de formatage, fournie par la toile.</summary>
         public Func<ContextMenu> FabriqueMenuContextuel { get; set; }
 
@@ -227,17 +246,40 @@ namespace Mentalo.Vue
             // la plateforme, « \r\n » sous Windows — le « \r » restait dans le modèle et
             // rendait une ligne vide de plus à chaque retour (boîte espacée, agrandie).
             editeur.NewLine = "\n";
+            // La sélection survit à la perte du clavier (1/11/2026) : un clic sur une liste
+            // du rail (police, taille, couleur…) ne doit pas la faire tomber avant le choix.
+            editeur.ClearSelectionOnLostFocus = false;
             editeur.TextWrapping = TextWrapping.Wrap;
             editeur.IsVisible = false;
             editeur.Cursor = Ui.CurseurTexte;
             editeur.AddHandler(KeyDownEvent, EditeurToucheEnfoncee, Avalonia.Interactivity.RoutingStrategies.Tunnel);
             editeur.LostFocus += EditeurFocusPerdu;
+            editeur.GotFocus += delegate
+            {
+                // L'éditeur reprend le clavier : il reprend la sélection qu'il avait en le
+                // perdant (une liste du rail qui se referme le lui rend après nous).
+                if (!_enEdition || !ReferenceEquals(_editeurMemorise, editeur) || _selectionMemoriseeFin <= _selectionMemoriseeDebut) return;
+                if (editeur.SelectionStart != editeur.SelectionEnd) return;
+                int longueur = (editeur.Text ?? "").Length;
+                if (_selectionMemoriseeFin > longueur) return;
+                editeur.SelectionStart = _selectionMemoriseeDebut;
+                editeur.SelectionEnd = _selectionMemoriseeFin;
+            };
             editeur.PropertyChanged += delegate(object expediteur, AvaloniaPropertyChangedEventArgs e)
             {
                 if (!_enEdition || _synchro) return;
                 if (e.Property == TextBox.TextProperty)
                 {
                     string texte = editeur.Text ?? "";
+                    // Le TextBox pose le texte AVANT de déplacer le curseur : à cet instant
+                    // CaretIndex et la sélection sont ceux d'AVANT la frappe. L'éditeur de
+                    // segments veut le curseur d'après (1/11/2026 : taper juste après une
+                    // frontière de style donnait au caractère précédent le style d'encore
+                    // avant — « gras pas uniforme »).
+                    EditeurSegments cible = ReferenceEquals(expediteur, _editeurApres) ? _segmentsEditionApres : _segmentsEdition;
+                    int caretApres = cible == null ? editeur.CaretIndex
+                        : EditeurSegments.CaretApresFrappe(cible.Texte, texte.Replace("\r\n", "\n").Replace('\r', '\n'),
+                            editeur.CaretIndex, editeur.SelectionStart, editeur.SelectionEnd);
                     if (texte.IndexOf('\r') >= 0)
                     {
                         // Un collage apporte des « \r\n » : le modèle ne connaît que « \n ».
@@ -251,11 +293,31 @@ namespace Mentalo.Vue
                         _synchro = false;
                         editeur.CaretIndex = Math.Max(0, Math.Min(texte.Length, caret - retires));
                     }
-                    EditeurSegments cible = ReferenceEquals(expediteur, _editeurApres) ? _segmentsEditionApres : _segmentsEdition;
-                    if (cible != null) cible.Synchroniser(texte, editeur.CaretIndex);
+                    if (cible != null)
+                    {
+                        cible.Synchroniser(texte, caretApres);
+                        AppliquerFormatEnAttente(editeur, cible);
+                    }
                 }
-                if (e.Property == TextBox.TextProperty || e.Property == TextBox.SelectionStartProperty
-                    || e.Property == TextBox.SelectionEndProperty || e.Property == TextBox.CaretIndexProperty)
+                else if (e.Property == TextBox.SelectionStartProperty || e.Property == TextBox.SelectionEndProperty
+                    || e.Property == TextBox.CaretIndexProperty)
+                {
+                    // Le TextBox efface sa sélection en perdant le clavier : on ne retient
+                    // que les sélections faites pendant qu'il l'avait.
+                    if (editeur.IsFocused)
+                    {
+                        _editeurMemorise = editeur;
+                        _selectionMemoriseeDebut = Math.Min(editeur.SelectionStart, editeur.SelectionEnd);
+                        _selectionMemoriseeFin = Math.Max(editeur.SelectionStart, editeur.SelectionEnd);
+                        // Le curseur a bougé sans frappe : la forme en attente tombe.
+                        if (_formatEnAttente != null && (editeur.CaretIndex != _positionEnAttente || _selectionMemoriseeDebut != _selectionMemoriseeFin))
+                            OublierFormatEnAttente();
+                    }
+                }
+                // Une sélection qui change sans le clavier n'est que l'effacement dû à la
+                // perte de focus : la barre garde l'état de la sélection mémorisée.
+                if (e.Property == TextBox.TextProperty || ((e.Property == TextBox.SelectionStartProperty
+                    || e.Property == TextBox.SelectionEndProperty || e.Property == TextBox.CaretIndexProperty) && editeur.IsFocused))
                 {
                     Action h = SelectionEditeurChangee;
                     if (h != null) h();
@@ -498,7 +560,8 @@ namespace Mentalo.Vue
                 CornerRadius = new CornerRadius(3),
                 Cursor = Ui.CurseurMain,
                 Child = contenu,
-                HorizontalAlignment = TexteRiche.AlignementHorizontal(alignement)
+                // Une tuile (Affichage posé) se centre dans la boîte (1/11, Rémi) ; une ligne de lien suit l'alignement du texte.
+                HorizontalAlignment = piece.Affichage != null ? HorizontalAlignment.Center : TexteRiche.AlignementHorizontal(alignement)
             };
             if (!string.IsNullOrEmpty(infobulle)) Ui.Infobulle(cadre, infobulle);
             if (survol)
@@ -578,6 +641,8 @@ namespace Mentalo.Vue
             _alignementAvantEdition = Modele.Alignement;
             _segmentsEdition = new EditeurSegments(Modele.Segments);
             _segmentsEditionApres = new EditeurSegments(Modele.SegmentsApres);
+            _editeurMemorise = null;
+            OublierFormatEnAttente();
 
             PreparerEditeur(_editeur, _segmentsEdition, Modele.Segments);
             // Sans largeur imposée, le TextBox s'étire au maximum : une boîte neuve
@@ -626,10 +691,23 @@ namespace Mentalo.Vue
             _synchro = false;
         }
 
+        /// <summary>Le texte en cours de frappe copié dans le modèle, l'éditeur
+        /// restant ouvert (1/11, Rémi) : de quoi sérialiser la carte (secours,
+        /// enregistrement automatique) sans sortir le caret de la boîte. Une
+        /// annulation (Échap) rend toujours le texte d'avant l'édition.</summary>
+        public void SynchroniserEdition()
+        {
+            if (!_enEdition) return;
+            Modele.Segments = TexteRiche.Normaliser(_segmentsEdition.Segments);
+            Modele.SegmentsApres = Modele.EstImage ? TexteRiche.Normaliser(_segmentsEditionApres.Segments) : new List<Segment>();
+        }
+
         public void TerminerEdition(bool valider)
         {
             if (!_enEdition) return;
             _enEdition = false;
+            _editeurMemorise = null;
+            OublierFormatEnAttente();
 
             List<Segment> nouveaux, nouveauxApres;
             if (valider)
@@ -747,9 +825,81 @@ namespace Mentalo.Vue
             {
                 if (ZonesFormatage.Contains(visuel)) return true;
                 if (visuel is MenuItem || visuel is ContextMenu || visuel is Avalonia.Controls.Primitives.Popup) return true;
-                visuel = visuel.GetVisualParent();
+                Visual parent = visuel.GetVisualParent();
+                if (parent == null)
+                {
+                    // La liste déroulée d'une ComboBox vit dans sa propre fenêtre (PopupRoot),
+                    // sans parent visuel : on rejoint le Popup qui l'héberge, puis sa ComboBox,
+                    // puis le rail — sinon dérouler la police ou la taille du rail de Marabook
+                    // clôturait l'édition (1/11/2026, Rémi).
+                    IHostedVisualTreeRoot hote = visuel as IHostedVisualTreeRoot;
+                    if (hote != null) parent = hote.Host;
+                    if (parent == null)
+                    {
+                        Avalonia.LogicalTree.ILogical logique = visuel as Avalonia.LogicalTree.ILogical;
+                        if (logique != null) parent = logique.LogicalParent as Visual;
+                    }
+                }
+                visuel = parent;
             }
             return false;
+        }
+
+        /// <summary>La plage que la mise en forme vise : la sélection du TextBox s'il
+        /// a le clavier, sinon celle qu'il avait avant de le perdre (il l'efface
+        /// lui-même en perdant le focus).</summary>
+        private void PlageVisee(TextBox editeur, out int debut, out int fin)
+        {
+            debut = Math.Min(editeur.SelectionStart, editeur.SelectionEnd);
+            fin = Math.Max(editeur.SelectionStart, editeur.SelectionEnd);
+            if (debut == fin && !editeur.IsFocused && ReferenceEquals(_editeurMemorise, editeur) && _selectionMemoriseeDebut != _selectionMemoriseeFin)
+            {
+                int longueur = (editeur.Text ?? "").Length;
+                debut = Math.Max(0, Math.Min(longueur, _selectionMemoriseeDebut));
+                fin = Math.Max(0, Math.Min(longueur, _selectionMemoriseeFin));
+            }
+        }
+
+        /// <summary>Rend le clavier à l'éditeur et y remet la plage visée (la perte
+        /// de focus l'avait effacée). Aussi un peu plus tard : une liste du rail qui
+        /// se referme reprend parfois le clavier après nous.</summary>
+        private void RendreFocusEtSelection(TextBox editeur, int debut, int fin)
+        {
+            if (fin > debut)
+            {
+                _editeurMemorise = editeur;
+                _selectionMemoriseeDebut = debut;
+                _selectionMemoriseeFin = fin;
+            }
+            editeur.Focus();
+            if (fin > debut) { editeur.SelectionStart = debut; editeur.SelectionEnd = fin; }
+            Dispatcher.UIThread.Post(delegate
+            {
+                if (!_enEdition || ProtectionFocus || editeur.IsFocused || !editeur.IsVisible) return;
+                editeur.Focus(); // GotFocus remet la sélection mémorisée
+            }, DispatcherPriority.Background);
+        }
+
+        private void OublierFormatEnAttente()
+        {
+            _formatEnAttente = null;
+            _positionEnAttente = -1;
+            _editeurEnAttente = null;
+        }
+
+        /// <summary>Après une frappe : si une forme attendait à cet endroit, ce qui vient
+        /// d'être inséré la prend (la suite hérite ensuite du caractère qui précède).</summary>
+        private void AppliquerFormatEnAttente(TextBox editeur, EditeurSegments cible)
+        {
+            if (_formatEnAttente == null) return;
+            if (!ReferenceEquals(editeur, _editeurEnAttente) || cible.DerniereInsertionLongueur <= 0
+                || cible.DerniereInsertionDebut != _positionEnAttente)
+            {
+                OublierFormatEnAttente();
+                return;
+            }
+            cible.AppliquerGabarit(_formatEnAttente, cible.DerniereInsertionDebut, cible.DerniereInsertionDebut + cible.DerniereInsertionLongueur);
+            OublierFormatEnAttente();
         }
 
         // ------------------------------------------------------------------ formatage de la sélection (pendant l'édition)
@@ -759,8 +909,8 @@ namespace Mentalo.Vue
             if (!_enEdition) return;
             TextBox editeur = EditeurActif;
             EditeurSegments cible = ReferenceEquals(editeur, _editeurApres) ? _segmentsEditionApres : _segmentsEdition;
-            int debut = Math.Min(editeur.SelectionStart, editeur.SelectionEnd);
-            int fin = Math.Max(editeur.SelectionStart, editeur.SelectionEnd);
+            int debut, fin;
+            PlageVisee(editeur, out debut, out fin);
             if (propriete == "alignement" && debut == fin)
             {
                 // Sans sélection : la ligne du curseur.
@@ -768,19 +918,32 @@ namespace Mentalo.Vue
             }
             else if (debut == fin)
             {
-                // Sans sélection, une bascule s'applique au mot sous le curseur.
+                // Sans sélection, la forme s'applique au mot sous le curseur…
                 string texte = editeur.Text ?? "";
                 int d = editeur.CaretIndex, f = editeur.CaretIndex;
                 while (d > 0 && !char.IsWhiteSpace(texte[d - 1])) d--;
                 while (f < texte.Length && !char.IsWhiteSpace(texte[f])) f++;
-                cible.AppliquerFormat(propriete, valeur, d, f);
+                if (f > d)
+                    cible.AppliquerFormat(propriete, valeur, d, f);
+                else
+                {
+                    // …et sans mot sous le curseur (boîte vide, après une espace), elle
+                    // attend la frappe qui suit.
+                    if (_formatEnAttente == null || !ReferenceEquals(editeur, _editeurEnAttente) || _positionEnAttente != editeur.CaretIndex)
+                    {
+                        _formatEnAttente = cible.StyleA(editeur.CaretIndex);
+                        _positionEnAttente = editeur.CaretIndex;
+                        _editeurEnAttente = editeur;
+                    }
+                    EditeurSegments.AppliquerProprieteA(_formatEnAttente, propriete, valeur);
+                }
             }
             else
                 cible.AppliquerFormat(propriete, valeur, debut, fin);
             if (propriete == "police") editeur.FontFamily = TexteRiche.Police((string)valeur);
             else if (propriete == "taille") editeur.FontSize = (double)valeur;
             else if (propriete == "couleur") editeur.Foreground = new SolidColorBrush(Palette.CouleurDepuis((string)valeur, Colors.Black));
-            editeur.Focus();
+            RendreFocusEtSelection(editeur, debut, fin);
             Action h = SelectionEditeurChangee;
             if (h != null) h();
         }
@@ -791,8 +954,8 @@ namespace Mentalo.Vue
             if (!_enEdition) return;
             TextBox editeur = EditeurActif;
             EditeurSegments cible = ReferenceEquals(editeur, _editeurApres) ? _segmentsEditionApres : _segmentsEdition;
-            int debut = Math.Min(editeur.SelectionStart, editeur.SelectionEnd);
-            int fin = Math.Max(editeur.SelectionStart, editeur.SelectionEnd);
+            int debut, fin;
+            PlageVisee(editeur, out debut, out fin);
             int caret = editeur.CaretIndex;
             cible.BasculerPuces(type, debut, fin);
             RemettreTexte(editeur, cible, caret);
@@ -803,7 +966,21 @@ namespace Mentalo.Vue
         {
             TextBox editeur = EditeurActif;
             EditeurSegments cible = ReferenceEquals(editeur, _editeurApres) ? _segmentsEditionApres : _segmentsEdition;
-            FormatCourant etat = cible.Lire(editeur.CaretIndex, editeur.SelectionStart, editeur.SelectionEnd, Modele.Alignement);
+            int debut, fin;
+            PlageVisee(editeur, out debut, out fin);
+            FormatCourant etat = cible.Lire(fin > debut ? fin : editeur.CaretIndex, debut, fin, Modele.Alignement);
+            if (_formatEnAttente != null && ReferenceEquals(editeur, _editeurEnAttente) && editeur.CaretIndex == _positionEnAttente)
+            {
+                // La forme en attente au curseur : c'est elle que le rail doit montrer.
+                etat.Police = _formatEnAttente.Police;
+                etat.Taille = _formatEnAttente.Taille;
+                etat.Couleur = _formatEnAttente.Couleur;
+                etat.Surlignage = _formatEnAttente.Surlignage;
+                etat.Gras = _formatEnAttente.Gras;
+                etat.Italique = _formatEnAttente.Italique;
+                etat.Souligne = _formatEnAttente.Souligne;
+                etat.Barre = _formatEnAttente.Barre;
+            }
             RemplirStyleBoite(etat);
             return etat;
         }
