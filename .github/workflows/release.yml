@@ -134,9 +134,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Dans « artefacts », pas « assets » (1/11) : le dépôt a son propre dossier
+      # assets/ (images du README), et « assets/* » livrait aussi ses sous-dossiers
+      # à gh release create (« read assets/downloads: is a directory »).
       - uses: actions/download-artifact@v4
         with:
-          path: assets
+          path: artefacts
           merge-multiple: true
       - name: Notes de version
         shell: bash
@@ -149,7 +152,8 @@ jobs:
         shell: bash
         run: |
           v="${{ needs.version.outputs.version }}"
-          gh release create "v$v" --title "Mental-O $v" --notes-file notes.md assets/*
+          ls -l artefacts
+          gh release create "v$v" --title "Mental-O $v" --notes-file notes.md $(find artefacts -maxdepth 1 -type f | sort)
           # Ne garder que les 3 releases les plus récentes.
           gh release list --limit 100 --json tagName --jq '.[3:][].tagName' | while read -r tag; do
             [ -n "$tag" ] && gh release delete "$tag" --cleanup-tag --yes || true
